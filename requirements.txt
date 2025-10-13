@@ -1,0 +1,10 @@
+pydantic
+qdrant-client
+numpy
+pandas
+opencv-python
+scikit-learn
+scikit-image
+scipy
+tensorflow
+pillow
