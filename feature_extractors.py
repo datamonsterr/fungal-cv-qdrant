@@ -17,6 +17,23 @@ from tensorflow.keras.layers import Input  # type: ignore
 
 ssl._create_default_https_context = ssl._create_unverified_context  # type: ignore
 
+
+def l2_normalize(features: np.ndarray) -> np.ndarray:
+    """
+    Apply L2 normalization to feature vector.
+    
+    Args:
+        features: Feature vector as numpy array
+        
+    Returns:
+        L2 normalized feature vector
+    """
+    norm = np.linalg.norm(features, ord=2)
+    if norm == 0:
+        return features
+    return features / norm
+
+
 class FeatureExtractor(ABC):
     """Abstract base class for feature extractors."""
     
@@ -76,6 +93,8 @@ class HOGExtractor(FeatureExtractor):
         if self._feature_dim is None:
             self._feature_dim = len(features)  # type: ignore
         
+        # Apply L2 normalization
+        features = l2_normalize(features)  # type: ignore
         return features  # type: ignore
     
     def get_feature_names(self) -> List[str]:
@@ -124,7 +143,8 @@ class GaborExtractor(FeatureExtractor):
             # Extract mean and std as features
             features.extend([filtered.mean(), filtered.std()])  # type: ignore
         
-        return np.array(features)
+        # Apply L2 normalization
+        return l2_normalize(np.array(features))
     
     def get_feature_names(self) -> List[str]:
         """Get feature names for Gabor filters."""
@@ -161,7 +181,8 @@ class ColorHistogramExtractor(FeatureExtractor):
             hist = hist / (hist.sum() + 1e-7)
             features.extend(hist)  # type: ignore
         
-        return np.array(features)
+        # Apply L2 normalization
+        return l2_normalize(np.array(features))
     
     def get_feature_names(self) -> List[str]:
         """Get feature names for color histogram."""
@@ -201,7 +222,8 @@ class ResNet50Extractor(FeatureExtractor):
         # Extract features
         features = self.model.predict(img_array, verbose=0)  # type: ignore
         
-        return features.flatten()  # type: ignore
+        # Apply L2 normalization
+        return l2_normalize(features.flatten())
     
     def get_feature_names(self) -> List[str]:
         """Get feature names for ResNet50."""
@@ -237,7 +259,8 @@ class MobileNetV2Extractor(FeatureExtractor):
         # Extract features
         features = self.model.predict(img_array, verbose=0)  # type: ignore
         
-        return features.flatten()  # type: ignore
+        # Apply L2 normalization
+        return l2_normalize(features.flatten())
     
     def get_feature_names(self) -> List[str]:
         """Get feature names for MobileNetV2."""
@@ -267,7 +290,8 @@ class EfficientNetV2B0Extractor(FeatureExtractor):
         img_array = np.expand_dims(rgb, axis=0)
         img_array = efficientnetv2_preprocess(img_array)
         features = self.model.predict(img_array, verbose=0)
-        return features.flatten()
+        # Apply L2 normalization
+        return l2_normalize(features.flatten())
 
     def get_feature_names(self) -> List[str]:
         return [f"efficientnetv2b0_{i}" for i in range(self._feature_dim)]

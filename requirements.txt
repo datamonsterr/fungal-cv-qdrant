@@ -8,3 +8,5 @@ scikit-image
 scipy
 tensorflow
 pillow
+matplotlib
+seaborn
