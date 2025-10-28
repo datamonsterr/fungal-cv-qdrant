@@ -162,8 +162,8 @@ def main() -> None:
     """Main function to upload features to Qdrant."""
     # Configuration
     QDRANT_URL = "http://localhost:6333"
-    COLLECTION_NAME = "myco_fungi_features"
-    FEATURES_JSON_PATH = "../Dataset/segmented_features.json"
+    COLLECTION_NAME = "myco_fungi_features_2"
+    FEATURES_JSON_PATH = "../Dataset/segmented_features_1.json"
     METADATA_JSON_PATH = "../Dataset/segmented_image_metadata.json"
     BATCH_SIZE = 100
     

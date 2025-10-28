@@ -1,16 +1,21 @@
 import os
 import json
 import cv2
+import ssl
 import numpy as np
 from abc import ABC, abstractmethod
 from typing import List, Tuple, Any
 from skimage.feature import hog  # type: ignore
 from skimage.filters import gabor_kernel  # type: ignore
 from scipy import ndimage as ndi  # type: ignore
-from tensorflow.keras.applications import ResNet50  # type: ignore
-from tensorflow.keras.applications.resnet50 import preprocess_input  # type: ignore
+from tensorflow.keras.applications import ResNet50, EfficientNetV2B0, MobileNetV2  # type: ignore
+from tensorflow.keras.applications.resnet50 import preprocess_input as resnet_preprocess  # type: ignore
+from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as efficientnetv2_preprocess  # type: ignore
+from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as mobilenetv2_preprocess  # type: ignore
 from tensorflow.keras.models import Model  # type: ignore
+from tensorflow.keras.layers import Input  # type: ignore
 
+ssl._create_default_https_context = ssl._create_unverified_context  # type: ignore
 
 class FeatureExtractor(ABC):
     """Abstract base class for feature extractors."""
@@ -191,7 +196,7 @@ class ResNet50Extractor(FeatureExtractor):
         img_array = np.expand_dims(rgb, axis=0)
         
         # Preprocess for ResNet50
-        img_array = preprocess_input(img_array)  # type: ignore
+        img_array = resnet_preprocess(img_array)  # type: ignore
         
         # Extract features
         features = self.model.predict(img_array, verbose=0)  # type: ignore
@@ -201,6 +206,71 @@ class ResNet50Extractor(FeatureExtractor):
     def get_feature_names(self) -> List[str]:
         """Get feature names for ResNet50."""
         return [f"resnet50_{i}" for i in range(self._feature_dim)]
+
+class MobileNetV2Extractor(FeatureExtractor):
+    """MobileNetV2 feature extractor (without final classification layer)."""
+    
+    def __init__(self, target_size: Tuple[int, int] = (224, 224)):
+        super().__init__("MobileNetV2")
+        self.target_size = target_size
+        
+        ssl._create_default_https_context = ssl._create_unverified_context  # type: ignore
+        base_model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg')  # type: ignore
+        
+        self.model: Any = Model(inputs=base_model.input, outputs=base_model.output)  # type: ignore
+        self._feature_dim = 1280  # MobileNetV2 output dimension
+    
+    def extract(self, image: np.ndarray) -> np.ndarray:
+        """Extract MobileNetV2 features from image."""
+        # Resize image
+        resized = cv2.resize(image, self.target_size)
+        
+        # Convert BGR to RGB
+        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        
+        # Expand dimensions for batch
+        img_array = np.expand_dims(rgb, axis=0)
+        
+        # Preprocess for MobileNetV2
+        img_array = mobilenetv2_preprocess(img_array)  # type: ignore
+        
+        # Extract features
+        features = self.model.predict(img_array, verbose=0)  # type: ignore
+        
+        return features.flatten()  # type: ignore
+    
+    def get_feature_names(self) -> List[str]:
+        """Get feature names for MobileNetV2."""
+        return [f"mobilenetv2_{i}" for i in range(self._feature_dim)]
+
+
+class EfficientNetV2B0Extractor(FeatureExtractor):
+    """EfficientNetV2B0 feature extractor (without final classification layer)."""
+    def __init__(self, target_size: Tuple[int, int] = (224, 224)):
+        super().__init__("EfficientNetV2B0")
+        self.target_size = target_size
+
+        # Ensure SSL context is set for model downloads
+        ssl._create_default_https_context = ssl._create_unverified_context
+        
+        base_model = EfficientNetV2B0(
+            weights='imagenet',
+            include_top=False,
+            pooling='avg'
+        )
+        self.model = base_model
+        self._feature_dim = 1280
+
+    def extract(self, image: np.ndarray) -> np.ndarray:
+        resized = cv2.resize(image, self.target_size)
+        rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
+        img_array = np.expand_dims(rgb, axis=0)
+        img_array = efficientnetv2_preprocess(img_array)
+        features = self.model.predict(img_array, verbose=0)
+        return features.flatten()
+
+    def get_feature_names(self) -> List[str]:
+        return [f"efficientnetv2b0_{i}" for i in range(self._feature_dim)]
 
 
 def extract_features_from_dataset(
@@ -290,12 +360,55 @@ def extract_features_from_dataset(
     return results
 
 
+def get_next_version(base_path: str, extension: str = ".json") -> str:
+    """
+    Get the next version number for a file path.
+    
+    Args:
+        base_path: Base path without version number (e.g., "../Dataset/segmented_features")
+        extension: File extension (default: ".json")
+    
+    Returns:
+        Path with next version number (e.g., "../Dataset/segmented_features_2.json")
+    """
+    import glob
+    import re
+    
+    # Find all existing versioned files
+    dir_path = os.path.dirname(base_path)
+    file_name = os.path.basename(base_path)
+    pattern = f"{file_name}_[0-9]+{extension}"
+    
+    existing_files = glob.glob(os.path.join(dir_path, pattern))
+    
+    # Extract version numbers and find the maximum
+    max_version = 0
+    version_regex = re.compile(rf"{re.escape(file_name)}_(\d+){re.escape(extension)}")
+    
+    for file_path in existing_files:
+        match = version_regex.search(os.path.basename(file_path))
+        if match:
+            version = int(match.group(1))
+            max_version = max(max_version, version)
+    
+    # Return next version
+    next_version = max_version + 1
+    return f"{base_path}_{next_version}{extension}"
+
+
 def main() -> None:
     """Main function to extract features from segmented images."""
-    # Paths
+    # Base paths - these are the actual existing files
     SEGMENT_IMAGE_PATH = "../Dataset/segmented_image"
     SEGMENT_METADATA_PATH = "../Dataset/segmented_image_metadata.json"
-    OUTPUT_JSON_PATH = "../Dataset/segmented_features.json"
+    BASE_OUTPUT_JSON_PATH = "../Dataset/segmented_features"
+    
+    # Get versioned output path (automatically increments version)
+    OUTPUT_JSON_PATH = get_next_version(BASE_OUTPUT_JSON_PATH, extension=".json")
+    
+    print(f"Using image path: {SEGMENT_IMAGE_PATH}")
+    print(f"Using metadata path: {SEGMENT_METADATA_PATH}")
+    print(f"Output will be saved to: {OUTPUT_JSON_PATH}\n")
     
     # Initialize feature extractors
     extractors: List[FeatureExtractor] = [
@@ -304,7 +417,9 @@ def main() -> None:
         HOGExtractor(orientations=9, pixels_per_cell=(16, 16), cells_per_block=(2, 2)),
         GaborExtractor(frequencies=[0.1, 0.2, 0.3, 0.4], thetas=[0, np.pi/4, np.pi/2, 3*np.pi/4]),
         ColorHistogramExtractor(bins=32),
-        ResNet50Extractor()
+        ResNet50Extractor(),
+        MobileNetV2Extractor(),
+        EfficientNetV2B0Extractor()
     ]
     
     # Extract features
