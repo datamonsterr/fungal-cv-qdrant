@@ -19,7 +19,9 @@ from feature_extractors import (
     HOGExtractor,
     GaborExtractor,
     ColorHistogramExtractor,
-    FeatureExtractor
+    FeatureExtractor,
+    MobileNetV2Extractor,
+    EfficientNetV2B0Extractor
 )
 
 
@@ -48,7 +50,10 @@ def select_one_strain_per_species(
     # Select first strain for each species (or could be random)
     selected = {}
     for species, strains in species_to_strains.items():
-        selected[species] = strains[0]  # Take first strain
+        if len(strains) > 1:
+            selected[species] = strains[1]  # Take first strain
+        else:
+            selected[species] = strains[0]
     
     return selected
 
@@ -239,6 +244,7 @@ def run_species_evaluation(
     collection_name: str,
     feature_extractor: FeatureExtractor,
     k: int = 5,
+    min_samples: int = None,
     without_siblings: bool = True,
     environment: str = None,
     output_dir: str = "./results"
@@ -251,6 +257,7 @@ def run_species_evaluation(
         collection_name: Name of Qdrant collection
         feature_extractor: Feature extractor to use
         k: Number of nearest neighbors
+        min_samples: Minimum number of samples (M) required for a species to be predicted
         without_siblings: Whether to exclude siblings
         environment: Environment filter
         output_dir: Output directory for results
@@ -263,6 +270,7 @@ def run_species_evaluation(
     print("="*80)
     print(f"\nFeature Extractor: {feature_extractor.name}")
     print(f"K: {k}")
+    print(f"Min Samples: {min_samples}")
     print(f"Without Siblings: {without_siblings}")
     print(f"Environment: {environment if environment else 'same as query'}")
     print("="*80 + "\n")
@@ -296,6 +304,7 @@ def run_species_evaluation(
                 strain=strain,
                 feature_extractor=feature_extractor,
                 k=k,
+                min_samples=min_samples,
                 without_siblings=without_siblings,
                 environment=environment,
                 output_dir=output_dir
@@ -320,9 +329,12 @@ def run_species_evaluation(
         # Confusion matrix
         print("\nGenerating confusion matrix...")
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        env_str = environment if environment else "same"
+        sibling_str = "no_siblings" if without_siblings else "with_siblings"
+        min_samples_str = f"_m{min_samples}" if min_samples is not None else ""
         cm_path = os.path.join(
             output_dir,
-            f"species_evaluation_cm_{feature_extractor.name.lower()}_k{k}_{timestamp}.png"
+            f"species_evaluation_cm_{feature_extractor.name.lower()}_k{k}{min_samples_str}_{env_str}_{sibling_str}_{timestamp}.png"
         )
         draw_confusion_matrix(results, output_path=cm_path)
         report_paths.append(cm_path)
@@ -342,6 +354,7 @@ def compare_extractors(
     client: QdrantClient,
     collection_name: str,
     k: int = 5,
+    min_samples: int = None,
     without_siblings: bool = True,
     environment: str = None,
     output_dir: str = "./results"
@@ -353,6 +366,7 @@ def compare_extractors(
         client: Qdrant client instance
         collection_name: Name of Qdrant collection
         k: Number of nearest neighbors
+        min_samples: Minimum number of samples (M) required for a species to be predicted
         without_siblings: Whether to exclude siblings
         environment: Environment filter
         output_dir: Output directory for results
@@ -361,14 +375,16 @@ def compare_extractors(
         ResNet50Extractor(),
         HOGExtractor(),
         GaborExtractor(),
-        ColorHistogramExtractor()
+        ColorHistogramExtractor(),
+        MobileNetV2Extractor(),
+        EfficientNetV2B0Extractor()
     ]
     
     print("\n" + "="*80)
     print("COMPARING ALL FEATURE EXTRACTORS")
     print("="*80)
     print(f"\nTesting {len(extractors)} extractors: {', '.join(e.name for e in extractors)}")
-    print(f"K: {k}, Without Siblings: {without_siblings}")
+    print(f"K: {k}, Min Samples: {min_samples}, Without Siblings: {without_siblings}")
     print("="*80 + "\n")
     
     all_results = {}
@@ -383,6 +399,7 @@ def compare_extractors(
             collection_name=collection_name,
             feature_extractor=extractor,
             k=k,
+            min_samples=min_samples,
             without_siblings=without_siblings,
             environment=environment,
             output_dir=output_dir
@@ -404,6 +421,7 @@ def compare_extractors(
     comparison_lines.append("="*80)
     comparison_lines.append(f"\nDate: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     comparison_lines.append(f"K: {k}")
+    comparison_lines.append(f"Min Samples: {min_samples}")
     comparison_lines.append(f"Without Siblings: {without_siblings}")
     comparison_lines.append(f"Environment: {environment if environment else 'same as query'}")
     comparison_lines.append("\n" + "-"*80)
@@ -437,19 +455,26 @@ def compare_extractors(
 if __name__ == "__main__":
     # Connect to Qdrant
     client = QdrantClient(host="localhost", port=6333)
-    collection_name = "myco_fungi_features"
+    collection_name = "myco_fungi_features_2"
     
     # Configuration
-    OUTPUT_DIR = "./results/species_evaluation"
     K = 5
+    MIN_SAMPLES = 0 # Set to an integer to enable minimum sample constraint
     WITHOUT_SIBLINGS = True
-    ENVIRONMENT = None  # None for same as query, "all" for no filter
+    ENVIRONMENT = None # None for same as query, "all" for no filter
+    
+    # Generate folder name based on parameters
+    env_str = ENVIRONMENT if ENVIRONMENT else "same"
+    sibling_str = "no_siblings" if WITHOUT_SIBLINGS else "with_siblings"
+    min_samples_str = f"_m{MIN_SAMPLES}" if MIN_SAMPLES is not None else ""
+    OUTPUT_DIR = f"./results/species_evaluation_k{K}{min_samples_str}_{env_str}_{sibling_str}"
     
     print("\n" + "="*80)
     print("MYCO FUNGI SPECIES EVALUATION SYSTEM")
     print("="*80)
     print("\nConfiguration:")
     print(f"  K: {K}")
+    print(f"  Min Samples: {MIN_SAMPLES}")
     print(f"  Without siblings: {WITHOUT_SIBLINGS}")
     print(f"  Environment: {ENVIRONMENT if ENVIRONMENT else 'same as query'}")
     print(f"  Output directory: {OUTPUT_DIR}")
@@ -462,18 +487,20 @@ if __name__ == "__main__":
         collection_name=collection_name,
         feature_extractor=ResNet50Extractor(),
         k=K,
+        min_samples=MIN_SAMPLES,
         without_siblings=WITHOUT_SIBLINGS,
         environment=ENVIRONMENT,
         output_dir=OUTPUT_DIR
     )
     
     # Option 2: Compare all extractors (uncomment to run)
-    # print("\nOption 2: Comparing all feature extractors...")
-    # compare_extractors(
-    #     client=client,
-    #     collection_name=collection_name,
-    #     k=K,
-    #     without_siblings=WITHOUT_SIBLINGS,
-    #     environment=ENVIRONMENT,
-    #     output_dir=OUTPUT_DIR
-    # )
+    print("\nOption 2: Comparing all feature extractors...")
+    compare_extractors(
+        client=client,
+        collection_name=collection_name,
+        k=K,
+        min_samples=MIN_SAMPLES,
+        without_siblings=WITHOUT_SIBLINGS,
+        environment=ENVIRONMENT,
+        output_dir=OUTPUT_DIR
+    )

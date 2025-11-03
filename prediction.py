@@ -156,21 +156,29 @@ def filter_siblings(
 def aggregate_predictions(
     all_results: List[Dict[str, Any]],
     strain_to_specy: Dict[str, str],
-    k: int
+    k: int,
+    min_samples: Optional[int] = None
 ) -> List[Tuple[str, float]]:
     """
-    Aggregate predictions using voting strategy.
+    Aggregate predictions using voting strategy with minimum sample constraint.
     
     Args:
         all_results: List of all neighbor results from all query images
         strain_to_specy: Mapping from strain to species
         k: Number of top neighbors to consider per query
+        min_samples: Minimum number of samples (M) required for a species to be considered.
+                    If set, only species with at least M matching samples will be eligible.
+                    The prediction will be the highest score among species meeting this constraint.
+                    If None, all species are considered (default behavior).
         
     Returns:
-        List of (species, score) tuples sorted by score in descending order
+        List of (species, score) tuples sorted by score in descending order.
+        If min_samples constraint is not met by any species, returns empty list or 
+        'unknown' species.
     """
-    # Count species votes from top-k neighbors
+    # Count species votes (weighted) and sample counts
     species_votes: Counter = Counter()
+    species_sample_counts: Counter = Counter()
     
     for result in all_results:
         # Get the strain from the neighbor
@@ -178,19 +186,43 @@ def aggregate_predictions(
         # Map strain to species
         neighbor_specy = strain_to_specy.get(neighbor_strain, 'unknown')
         
-        # Weight by similarity score (optional: could use uniform voting)
+        # Weight by similarity score
         score = result.get('score', 0.0)
         species_votes[neighbor_specy] += score
+        
+        # Count the number of samples for this species
+        species_sample_counts[neighbor_specy] += 1
+    
+    # Apply minimum sample constraint if specified
+    if min_samples is not None and min_samples > 0:
+        # Filter species that don't meet the minimum sample requirement
+        eligible_species = {
+            specy for specy, count in species_sample_counts.items() 
+            if count >= min_samples
+        }
+        
+        # If no species meets the constraint, return unknown
+        if not eligible_species:
+            return [('unknown', 0.0)]
+        
+        # Filter votes to only eligible species
+        filtered_votes = {
+            specy: votes for specy, votes in species_votes.items() 
+            if specy in eligible_species
+        }
+    else:
+        # No constraint, use all species
+        filtered_votes = dict(species_votes)
     
     # Normalize scores
-    total_score = sum(species_votes.values())
+    total_score = sum(filtered_votes.values())
     if total_score > 0:
         normalized_results = [
             (specy, count / total_score) 
-            for specy, count in species_votes.items()
+            for specy, count in filtered_votes.items()
         ]
     else:
-        normalized_results = [(specy, 0.0) for specy in species_votes.keys()]
+        normalized_results = [(specy, 0.0) for specy in filtered_votes.keys()]
     
     # Sort by score in descending order
     normalized_results.sort(key=lambda x: x[1], reverse=True)
@@ -204,6 +236,7 @@ def predict(
     strain: str,
     feature_extractor: FeatureExtractor,
     k: int = 5,
+    min_samples: Optional[int] = None,
     without_siblings: bool = True,
     environment: Optional[str] = None,
     strain_to_specy_path: str = "../Dataset/strain_to_specy.csv",
@@ -219,6 +252,8 @@ def predict(
         strain: Strain name to predict
         feature_extractor: Feature extractor instance
         k: Number of nearest neighbors to consider
+        min_samples: Minimum number of samples (M) required for a species to be predicted.
+                    If set, only species with at least M matching samples will be eligible.
         without_siblings: Whether to exclude images with same parent_id
         environment: Environment filter (None for same as query, "all" for no filter)
         strain_to_specy_path: Path to strain-to-species mapping CSV
@@ -241,7 +276,7 @@ def predict(
     print(f"Predicting species for strain: {strain}")
     print(f"Ground truth: {ground_truth_specy}")
     print(f"Feature extractor: {feature_extractor.name}")
-    print(f"K: {k}, Without siblings: {without_siblings}, Environment: {environment}")
+    print(f"K: {k}, Min samples: {min_samples}, Without siblings: {without_siblings}, Environment: {environment}")
     print(f"{'='*80}\n")
     
     # Get all images for this strain
@@ -331,7 +366,7 @@ def predict(
             continue
     
     # Aggregate predictions
-    aggregated_results = aggregate_predictions(all_neighbors, strain_to_specy, k)
+    aggregated_results = aggregate_predictions(all_neighbors, strain_to_specy, k, min_samples)
     
     # Get predicted species (top-1)
     predicted_specy = aggregated_results[0][0] if aggregated_results else 'unknown'
@@ -359,6 +394,7 @@ def predict(
         'aggregated_results': [{'specy': s, 'score': sc} for s, sc in aggregated_results],
         'feature_extractor': feature_extractor.name,
         'k': k,
+        'min_samples': min_samples,
         'without_siblings': without_siblings,
         'environment': environment,
         'timestamp': datetime.now().isoformat()
@@ -368,7 +404,8 @@ def predict(
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     env_str = environment if environment else "same"
     sibling_str = "no_siblings" if without_siblings else "with_siblings"
-    filename = f"prediction_{strain.replace(' ', '_')}_{feature_extractor.name.lower()}_k{k}_{env_str}_{sibling_str}_{timestamp}.json"
+    min_samples_str = f"_m{min_samples}" if min_samples is not None else ""
+    filename = f"prediction_{strain.replace(' ', '_')}_{feature_extractor.name.lower()}_k{k}{min_samples_str}_{env_str}_{sibling_str}_{timestamp}.json"
     filepath = os.path.join(output_dir, filename)
     
     with open(filepath, 'w') as f:
@@ -537,6 +574,7 @@ def batch_predict(
     strains: List[str],
     feature_extractor: FeatureExtractor,
     k: int = 5,
+    min_samples: Optional[int] = None,
     without_siblings: bool = True,
     environment: Optional[str] = None,
     strain_to_specy_path: str = "../Dataset/strain_to_specy.csv",
@@ -552,6 +590,7 @@ def batch_predict(
         strains: List of strain names to predict
         feature_extractor: Feature extractor instance
         k: Number of nearest neighbors to consider
+        min_samples: Minimum number of samples (M) required for a species to be predicted
         without_siblings: Whether to exclude images with same parent_id
         environment: Environment filter
         strain_to_specy_path: Path to strain-to-species mapping CSV
@@ -591,6 +630,7 @@ def batch_predict(
                 strain=strain,
                 feature_extractor=feature_extractor,
                 k=k,
+                min_samples=min_samples,
                 without_siblings=without_siblings,
                 environment=environment,
                 strain_to_specy_path=strain_to_specy_path,
@@ -607,13 +647,14 @@ def batch_predict(
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         env_str = environment if environment else "same"
         sibling_str = "no_siblings" if without_siblings else "with_siblings"
-        cm_filename = f"confusion_matrix_{feature_extractor.name.lower()}_k{k}_{env_str}_{sibling_str}_{timestamp}.png"
+        min_samples_str = f"_m{min_samples}" if min_samples is not None else ""
+        cm_filename = f"confusion_matrix_{feature_extractor.name.lower()}_k{k}{min_samples_str}_{env_str}_{sibling_str}_{timestamp}.png"
         cm_path = os.path.join(output_dir, cm_filename)
         
         draw_confusion_matrix(all_results, output_path=cm_path)
         
         # Save summary
-        summary_filename = f"batch_summary_{feature_extractor.name.lower()}_k{k}_{env_str}_{sibling_str}_{timestamp}.json"
+        summary_filename = f"batch_summary_{feature_extractor.name.lower()}_k{k}{min_samples_str}_{env_str}_{sibling_str}_{timestamp}.json"
         summary_path = os.path.join(output_dir, summary_filename)
         
         summary = {
@@ -623,6 +664,7 @@ def batch_predict(
             'accuracy': sum(1 for r in all_results if r.get('correct', False)) / len(all_results) if all_results else 0,
             'feature_extractor': feature_extractor.name,
             'k': k,
+            'min_samples': min_samples,
             'without_siblings': without_siblings,
             'environment': environment,
             'timestamp': datetime.now().isoformat(),
