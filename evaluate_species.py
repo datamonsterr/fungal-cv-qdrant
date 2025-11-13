@@ -9,7 +9,6 @@ from collections import defaultdict
 from qdrant_client import QdrantClient
 
 from prediction import (
-    predict,
     draw_confusion_matrix,
     load_strain_to_species_mapping,
     get_available_strains,
@@ -348,36 +347,6 @@ def collect_testset(
         return test_sets
 
 
-def create_segment_groups(
-    strain_images: List[Dict[str, Any]],
-    group_size: int = 3
-) -> List[List[Dict[str, Any]]]:
-    """
-    Group strain images into fixed-size groups for independent evaluation.
-    
-    Args:
-        strain_images: List of image metadata dictionaries
-        group_size: Number of segments per group (default: 3)
-        
-    Returns:
-        List of image groups, where each group contains group_size images
-    """
-    # Sort by parent_id and segment_index for consistency
-    sorted_images = sorted(
-        strain_images, 
-        key=lambda x: (x.get('parent_id', ''), x.get('segment_index', 0))
-    )
-    
-    # Create groups
-    groups = []
-    for i in range(0, len(sorted_images), group_size):
-        group = sorted_images[i:i+group_size]
-        if len(group) == group_size:  # Only include complete groups
-            groups.append(group)
-    
-    return groups
-
-
 def predict_segment_group(
     client: QdrantClient,
     collection_name: str,
@@ -504,7 +473,6 @@ def run_species_evaluation(
     without_siblings: bool = True,
     environment: str = None,
     strategy: str = "avg",
-    segment_group_size: int = 3,
     output_dir: str = "./results"
 ) -> Tuple[List[Dict[str, Any]], List[str]]:
     """
@@ -551,7 +519,6 @@ def run_species_evaluation(
                     - "all": E2 strategy (6 test sets with one img per env each)
                     - specific name: E3 strategy (6 test sets with 1 img each from that env)
         strategy: Aggregation strategy - "avg" or "uni"
-        segment_group_size: Deprecated parameter (kept for compatibility)
         output_dir: Output directory for results
         
     Returns:
