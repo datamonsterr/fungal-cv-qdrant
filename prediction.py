@@ -157,7 +157,8 @@ def aggregate_predictions(
     all_results: List[Dict[str, Any]],
     strain_to_specy: Dict[str, str],
     k: int,
-    min_samples: Optional[int] = None
+    min_samples: Optional[int] = None,
+    strategy: str = "avg"
 ) -> List[Tuple[str, float]]:
     """
     Aggregate predictions using voting strategy with minimum sample constraint.
@@ -170,13 +171,15 @@ def aggregate_predictions(
                     If set, only species with at least M matching samples will be eligible.
                     The prediction will be the highest score among species meeting this constraint.
                     If None, all species are considered (default behavior).
+        strategy: Aggregation strategy - "avg" for weighted by score (default), 
+                 "uni" for uniform voting (each match counts as 1)
         
     Returns:
         List of (species, score) tuples sorted by score in descending order.
         If min_samples constraint is not met by any species, returns empty list or 
         'unknown' species.
     """
-    # Count species votes (weighted) and sample counts
+    # Count species votes (weighted or uniform) and sample counts
     species_votes: Counter = Counter()
     species_sample_counts: Counter = Counter()
     
@@ -186,9 +189,14 @@ def aggregate_predictions(
         # Map strain to species
         neighbor_specy = strain_to_specy.get(neighbor_strain, 'unknown')
         
-        # Weight by similarity score
-        score = result.get('score', 0.0)
-        species_votes[neighbor_specy] += score
+        # Apply voting strategy
+        if strategy == "uni":
+            # Uniform voting: each match counts as 1
+            species_votes[neighbor_specy] += 1.0
+        else:  # strategy == "avg"
+            # Weighted voting: weight by similarity score
+            score = result.get('score', 0.0)
+            species_votes[neighbor_specy] += score
         
         # Count the number of samples for this species
         species_sample_counts[neighbor_specy] += 1
@@ -239,6 +247,7 @@ def predict(
     min_samples: Optional[int] = None,
     without_siblings: bool = True,
     environment: Optional[str] = None,
+    strategy: str = "avg",
     strain_to_specy_path: str = "../Dataset/strain_to_specy.csv",
     segmented_image_dir: str = "../Dataset/segmented_image",
     output_dir: str = "./results"
@@ -256,6 +265,7 @@ def predict(
                     If set, only species with at least M matching samples will be eligible.
         without_siblings: Whether to exclude images with same parent_id
         environment: Environment filter (None for same as query, "all" for no filter)
+        strategy: Aggregation strategy - "avg" for weighted by score, "uni" for uniform voting
         strain_to_specy_path: Path to strain-to-species mapping CSV
         segmented_image_dir: Directory containing segmented images
         output_dir: Directory to save results
@@ -366,7 +376,7 @@ def predict(
             continue
     
     # Aggregate predictions
-    aggregated_results = aggregate_predictions(all_neighbors, strain_to_specy, k, min_samples)
+    aggregated_results = aggregate_predictions(all_neighbors, strain_to_specy, k, min_samples, strategy)
     
     # Get predicted species (top-1)
     predicted_specy = aggregated_results[0][0] if aggregated_results else 'unknown'
@@ -397,6 +407,7 @@ def predict(
         'min_samples': min_samples,
         'without_siblings': without_siblings,
         'environment': environment,
+        'strategy': strategy,
         'timestamp': datetime.now().isoformat()
     }
     
@@ -405,7 +416,7 @@ def predict(
     env_str = environment if environment else "same"
     sibling_str = "no_siblings" if without_siblings else "with_siblings"
     min_samples_str = f"_m{min_samples}" if min_samples is not None else ""
-    filename = f"prediction_{strain.replace(' ', '_')}_{feature_extractor.name.lower()}_k{k}{min_samples_str}_{env_str}_{sibling_str}_{timestamp}.json"
+    filename = f"prediction_{strain.replace(' ', '_')}_{feature_extractor.name.lower()}_k{k}{min_samples_str}_{env_str}_{sibling_str}_{strategy}_{timestamp}.json"
     filepath = os.path.join(output_dir, filename)
     
     with open(filepath, 'w') as f:

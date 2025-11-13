@@ -178,7 +178,7 @@ class ColorHistogramExtractor(FeatureExtractor):
             hist = cv2.calcHist([rgb], [i], None, [self.bins], [0, 256])
             hist = hist.flatten()
             # Normalize histogram
-            hist = hist / (hist.sum() + 1e-7)
+            # hist = hist / (hist.sum() + 1e-7)
             features.extend(hist)  # type: ignore
         
         # Apply L2 normalization
@@ -188,6 +188,44 @@ class ColorHistogramExtractor(FeatureExtractor):
         """Get feature names for color histogram."""
         names: List[str] = []
         for channel in ['r', 'g', 'b']:
+            for i in range(self.bins):
+                names.append(f"hist_{channel}_{i}")
+        return names
+
+
+class ColorHistogramHSExtractor(FeatureExtractor):
+    """Color histogram feature extractor using HSV color space (H and S channels only)."""
+    
+    def __init__(self, bins: int = 32, target_size: Tuple[int, int] = (128, 128)):
+        super().__init__("ColorHistogramHS")
+        self.bins = bins
+        self.target_size = target_size
+    
+    def extract(self, image: np.ndarray) -> np.ndarray:
+        """Extract color histogram features from H and S channels of HSV image."""
+        # Resize image
+        resized = cv2.resize(image, self.target_size)
+        
+        # Convert BGR to HSV
+        hsv = cv2.cvtColor(resized, cv2.COLOR_BGR2HSV)
+        
+        # Compute histogram for H and S channels only (skip V channel)
+        features: List[float] = []
+        for i in range(2):  # H and S channels (indices 0 and 1)
+            if i == 0:  # Hue channel: range [0, 180] in OpenCV
+                hist = cv2.calcHist([hsv], [i], None, [self.bins], [0, 180])
+            else:  # Saturation channel: range [0, 256]
+                hist = cv2.calcHist([hsv], [i], None, [self.bins], [0, 256])
+            hist = hist.flatten()
+            features.extend(hist)  # type: ignore
+        
+        # Apply L2 normalization
+        return l2_normalize(np.array(features))
+    
+    def get_feature_names(self) -> List[str]:
+        """Get feature names for HSV histogram (H and S channels)."""
+        names: List[str] = []
+        for channel in ['h', 's']:
             for i in range(self.bins):
                 names.append(f"hist_{channel}_{i}")
         return names
@@ -441,6 +479,7 @@ def main() -> None:
         HOGExtractor(orientations=9, pixels_per_cell=(16, 16), cells_per_block=(2, 2)),
         GaborExtractor(frequencies=[0.1, 0.2, 0.3, 0.4], thetas=[0, np.pi/4, np.pi/2, 3*np.pi/4]),
         ColorHistogramExtractor(bins=32),
+        ColorHistogramHSExtractor(bins=32),
         ResNet50Extractor(),
         MobileNetV2Extractor(),
         EfficientNetV2B0Extractor()
