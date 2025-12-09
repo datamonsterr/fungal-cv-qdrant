@@ -459,6 +459,8 @@ def visualize_false_predictions(
         feature_extractor: Feature extractor instance
         max_visualizations: Maximum number of visualizations to create
     """
+    from query_utils import visualize_false_prediction
+    
     print(f"\n{'='*80}")
     print(f"Creating visualizations for false prediction: {result['strain']}")
     print(f"Predicted: {result['predicted_specy']}, Ground truth: {result['ground_truth']}")
@@ -488,15 +490,18 @@ def visualize_false_predictions(
         output_filename = f"false_pred_{result['strain'].replace(' ', '_')}_{query_image_id}_{feature_extractor.name.lower()}.jpg"
         output_path = os.path.join(output_dir, output_filename)
         
-        # Create visualization
+        # Create visualization using visualize_false_prediction
         try:
-            visualize_neighbors(
+            visualize_false_prediction(
                 query_image_path=query_image_path,
                 neighbors=neighbors,
                 segmented_image_dir=segmented_image_dir,
                 output_path=output_path,
+                ground_truth_species=result['ground_truth'],
+                predicted_species=result['predicted_specy'],
+                max_neighbors=7,
                 query_metadata=query_metadata,
-                max_neighbors=min(7, len(neighbors))
+                filter_same_strain=True  # Filter out same-strain neighbors
             )
             print(f"  Visualization saved: {output_filename}")
         except Exception as e:

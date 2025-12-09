@@ -3,6 +3,7 @@ Species-level evaluation script.
 Takes one strain per species, runs predictions, and generates comprehensive reports.
 """
 import os
+import json
 from datetime import datetime
 from typing import Dict, List, Tuple, Any, Optional
 from collections import defaultdict
@@ -96,14 +97,14 @@ def print_selection_report(
     
     # Print to console
     report_text = "\n".join(report_lines)
-    print(report_text)
+    # Don't print - keep output minimal
     
     # Save to file
     os.makedirs(output_dir, exist_ok=True)
     with open(report_path, 'w') as f:
         f.write(report_text)
     
-    print(f"\nSelection report saved to: {report_path}\n")
+    # Don't print path - keep output minimal
     return report_path
 
 
@@ -229,14 +230,14 @@ def print_prediction_results(
     
     # Print to console
     report_text = "\n".join(report_lines)
-    print("\n" + report_text)
+    # Don't print - keep output minimal
     
     # Save to file
     os.makedirs(output_dir, exist_ok=True)
     with open(report_path, 'w') as f:
         f.write(report_text)
     
-    print(f"\nDetailed results saved to: {report_path}\n")
+    # Don't print path - keep output minimal
     return report_path
 
 
@@ -524,59 +525,50 @@ def run_species_evaluation(
     Returns:
         Tuple of (results list, report file paths list)
     """
-    print("="*80)
-    print("SPECIES-LEVEL EVALUATION (6 TEST SETS PER STRAIN)")
-    print("="*80)
-    print(f"\nFeature Extractor: {feature_extractor.name}")
-    print(f"K: {k}")
-    print(f"Min Samples: {min_samples}")
-    print(f"Without Siblings: {without_siblings}")
-    
     # Determine evaluation strategy
     if environment is None:
         eval_strategy = "E1"
         env_strategy_code = "E1"
-        env_description = "6 test sets, each with one image per env, query same env"
+        env_folder_suffix = ""  # No environment in folder name for E1
     elif environment.lower() == "all":
         eval_strategy = "E2"
         env_strategy_code = "E2"
-        env_description = "6 test sets, each with one image per env, query all envs"
+        env_folder_suffix = ""  # No environment in folder name for E2
     else:
         eval_strategy = "E3"
         env_strategy_code = f"E3_{environment}"
-        env_description = f"6 test sets, each with 1 image from {environment}"
+        env_folder_suffix = f"_{environment}"  # Include environment in folder name for E3
     
-    print(f"Evaluation Strategy: {eval_strategy} ({env_description})")
-    print(f"Aggregation Strategy: {strategy}")
-    print(f"Note: Each test set is evaluated to produce ONE prediction")
-    print("="*80 + "\n")
+    print("="*80)
+    print("SPECIES-LEVEL EVALUATION (6 TEST SETS PER STRAIN)")
+    print("="*80)
+    print(f"Feature Extractor: {feature_extractor.name}")
+    print(f"K: {k} | Min Samples: {min_samples} | Without Siblings: {without_siblings}")
+    print(f"Evaluation: {eval_strategy} | Aggregation: {strategy}")
+    print("="*80)
     
     # Load mappings
     strain_to_specy = load_strain_to_species_mapping()
     available_strains = get_available_strains(client, collection_name)
     
     # STEP 1: Select one strain per species
-    print("Step 1: Selecting one strain per species...")
+    print("\n[1/3] Selecting strains...", end=" ", flush=True)
     selected = select_one_strain_per_species(available_strains, strain_to_specy)
-    print(f"Selected {len(selected)} strains (one per species)\n")
+    print(f"✓ Selected {len(selected)} strains")
     
-    # Print and save selection report
-    selection_report_path = print_selection_report(selected, output_dir)
+    # Initialize report paths (strain selection not saved here - done in comprehensive eval)
+    report_paths = []
     
     # STEP 2: Run predictions (6 test sets per strain)
-    # For each strain:
-    #   - Collect 6 test sets (each with one image per environment for E1/E2, or one image from specific env for E3)
-    #   - Evaluate each test set independently
-    #   - Each test set produces ONE prediction
-    print("\nStep 2: Running predictions (6 test sets per strain)...\n")
+    print("\n[2/3] Running predictions...", flush=True)
     results = []
     total_test_sets = 0
+    total_strains = len(selected)
     
     for idx, (species, strain) in enumerate(sorted(selected.items()), 1):
-        print(f"\n{'='*80}")
-        print(f"Processing {idx}/{len(selected)}: {species}")
-        print(f"Selected strain: {strain}")
-        print(f"{'='*80}\n")
+        # Show progress
+        progress = (idx / total_strains) * 100
+        print(f"\r  Progress: {progress:5.1f}% ({idx}/{total_strains} strains)", end="", flush=True)
         
         try:
             # Collect test sets for this strain
@@ -588,30 +580,11 @@ def run_species_evaluation(
             )
             
             if not test_sets:
-                print(f"No test sets created for strain {strain}")
                 continue
-            
-            print(f"Created {len(test_sets)} test sets")
-            if test_sets:
-                print(f"Each test set has {len(test_sets[0])} images")
-            print()
             
             # Evaluate EACH test set
             for test_set_idx, test_set in enumerate(test_sets, 1):
                 total_test_sets += 1
-                
-                # Show what's in this test set
-                if len(test_set) == 1:
-                    img = test_set[0]
-                    print(f"  Test set {test_set_idx}/{len(test_sets)}: "
-                          f"1 image ({img.get('image_id')}, env={img.get('environment')}, "
-                          f"seg={img.get('segment_index')})...")
-                else:
-                    envs = sorted(set(img.get('environment', 'unknown') for img in test_set))
-                    seg_idx = test_set[0].get('segment_index', '?')
-                    print(f"  Test set {test_set_idx}/{len(test_sets)}: "
-                          f"{len(test_set)} images (segment_index={seg_idx}, "
-                          f"envs={', '.join(envs)})...")
                 
                 # Make ONE prediction using this test set
                 result = predict_segment_group(
@@ -631,59 +604,128 @@ def run_species_evaluation(
                 result['test_set_index'] = test_set_idx
                 result['test_set_size'] = len(test_set)
                 result['evaluation_strategy'] = eval_strategy
+                result['species'] = species
                 
                 results.append(result)
                 
-                # Print result
-                correct_mark = "✓" if result['correct'] else "✗"
-                print(f"    {correct_mark} Predicted: {result['predicted_specy']} "
-                      f"(conf: {result['predicted_confidence']:.4f})")
-                
         except Exception as e:
-            print(f"Error processing strain {strain}: {e}")
-            import traceback
-            traceback.print_exc()
+            print(f"\n  Warning: Error processing strain {strain}: {e}")
             continue
     
-    print(f"\n{'='*80}")
-    print(f"Total strains evaluated: {len(selected)}")
-    print(f"Total test sets evaluated: {total_test_sets}")
-    print(f"Total predictions: {len(results)}")
-    print(f"Average predictions per strain: {len(results)/len(selected):.1f}" if selected else "N/A")
-    print(f"{'='*80}")
-    
-    # Generate reports
-    report_paths = [selection_report_path]
+    print(f"\r  Progress: 100.0% ({total_strains}/{total_strains} strains) ✓")
+    print(f"  Completed {len(results)} predictions from {total_test_sets} test sets")
     
     if results:
-        print("\n" + "="*80)
-        print("Step 3: Generating reports...")
-        print("="*80 + "\n")
+        print("\n[3/3] Generating reports...", end=" ", flush=True)
         
-        # Detailed prediction results
-        results_report_path = print_prediction_results(results, output_dir)
-        report_paths.append(results_report_path)
-        
-        # Confusion matrix
-        print("\nGenerating confusion matrix...")
+        # Save JSON results
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         env_str = environment if environment else "same"
-        sibling_str = "no_siblings" if without_siblings else "with_siblings"
-        min_samples_str = f"_m{min_samples}" if min_samples is not None else ""
-        cm_path = os.path.join(
+        min_samples_str = f"M{min_samples}" if min_samples is not None else "M0"
+        
+        # Create strategy-specific output directory
+        # Format: {extractor}_{strategy}{_environment_for_E3}_{aggregation}
+        # E1: ColorHistogram_E1_AVG
+        # E2: ColorHistogram_E2_AVG
+        # E3: ColorHistogram_E3_PDA_AVG
+        strategy_dir = os.path.join(
             output_dir,
-            f"species_evaluation_{eval_strategy}_{feature_extractor.name.lower()}_k{k}{min_samples_str}_{env_str}_{sibling_str}_{strategy}_{timestamp}.png"
+            f"{feature_extractor.name}_{eval_strategy}{env_folder_suffix}_{strategy.upper()}"
+        )
+        os.makedirs(strategy_dir, exist_ok=True)
+        
+        # Save detailed JSON results
+        json_path = os.path.join(
+            strategy_dir,
+            f"results_{timestamp}.json"
+        )
+        
+        # Prepare JSON-serializable results
+        json_results = {
+            'metadata': {
+                'timestamp': timestamp,
+                'feature_extractor': feature_extractor.name,
+                'k': k,
+                'min_samples': min_samples,
+                'without_siblings': without_siblings,
+                'environment': environment,
+                'eval_strategy': eval_strategy,
+                'aggregation_strategy': strategy,
+                'total_strains': len(selected),
+                'total_predictions': len(results)
+            },
+            'predictions': []
+        }
+        
+        for result in results:
+            # Create a clean copy without raw_results (too verbose for JSON)
+            clean_result = {k: v for k, v in result.items() if k != 'raw_results'}
+            json_results['predictions'].append(clean_result)
+        
+        with open(json_path, 'w') as f:
+            json.dump(json_results, f, indent=2)
+        
+        # Detailed prediction results (text format, quietly)
+        results_report_path = print_prediction_results(results, strategy_dir)
+        
+        # Confusion matrix
+        cm_path = os.path.join(
+            strategy_dir,
+            f"confusion_matrix_{timestamp}.png"
         )
         draw_confusion_matrix(results, output_path=cm_path)
+        
+        # Generate false prediction visualizations using new comprehensive layout
+        false_predictions = [r for r in results if not r['correct']]
+        if false_predictions:
+            false_pred_dir = os.path.join(strategy_dir, "false_predictions")
+            os.makedirs(false_pred_dir, exist_ok=True)
+            
+            from visualize_prediction import batch_visualize_predictions
+            
+            # Get segmented image directory from config or default
+            try:
+                from config import SEGMENTED_IMAGE_DIR
+            except:
+                SEGMENTED_IMAGE_DIR = "../Dataset/segmented_image"
+            
+            try:
+                # Use new comprehensive visualization showing all environments
+                batch_visualize_predictions(
+                    prediction_results=false_predictions,
+                    segmented_image_dir=SEGMENTED_IMAGE_DIR,
+                    output_dir=false_pred_dir,
+                    k=7,  # Show 7 neighbors per environment
+                    filter_correct=False,  # Already filtered for false predictions
+                    max_visualizations=10  # Limit to 10 visualizations per evaluation
+                )
+            except Exception as e:
+                # Silently skip visualization errors to not break evaluation
+                pass
+        
+        print(f"✓")
+        # Don't print individual report paths - keep output minimal
+    
+    # Add all report paths
+    if results:
+        # Detailed prediction results (text format, quietly)
+        results_report_path = print_prediction_results(results, strategy_dir)
+        report_paths.append(results_report_path)
+        
+        # Add confusion matrix path
         report_paths.append(cm_path)
+        
+        # Add JSON path
+        report_paths.append(json_path)
     
     print("\n" + "="*80)
     print("EVALUATION COMPLETE!")
     print("="*80)
-    print(f"\nGenerated {len(report_paths)} report files:")
-    for path in report_paths:
-        print(f"  - {path}")
-    print("\n")
+    correct_count = sum(1 for r in results if r['correct'])
+    accuracy = (correct_count / len(results) * 100) if results else 0
+    print(f"Accuracy: {correct_count}/{len(results)} = {accuracy:.2f}%")
+    print(f"Reports saved to: {strategy_dir}/")
+    print("="*80 + "\n")
     
     return results, report_paths
 
@@ -856,6 +898,41 @@ def run_comprehensive_evaluation(
     print(f"Without Siblings: {without_siblings}")
     print("="*80 + "\n")
     
+    # Select strains once at the beginning
+    print("Selecting one strain per species for all evaluations...", end=" ", flush=True)
+    strain_to_specy = load_strain_to_species_mapping()
+    available_strains = get_available_strains(client, collection_name)
+    selected_strains = select_one_strain_per_species(available_strains, strain_to_specy)
+    print(f"✓ Selected {len(selected_strains)} strains\n")
+    
+    # Save strain selection report once
+    os.makedirs(output_dir, exist_ok=True)
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    selection_report_path = os.path.join(output_dir, f"strain_selection_report_{timestamp}.txt")
+    
+    report_lines = []
+    report_lines.append("="*80)
+    report_lines.append("STRAIN SELECTION REPORT")
+    report_lines.append("="*80)
+    report_lines.append(f"\nDate: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    report_lines.append(f"Total species: {len(selected_strains)}")
+    report_lines.append("\n" + "-"*80)
+    report_lines.append(f"{'Species':<40} {'Selected Strain'}")
+    report_lines.append("-"*80)
+    
+    for species in sorted(selected_strains.keys()):
+        strain = selected_strains[species]
+        report_lines.append(f"{species:<40} {strain}")
+    
+    report_lines.append("-"*80)
+    report_lines.append(f"\nTotal strains selected: {len(selected_strains)}")
+    report_lines.append("="*80)
+    
+    with open(selection_report_path, 'w') as f:
+        f.write("\n".join(report_lines))
+    
+    print(f"Strain selection saved to: {selection_report_path}\n")
+    
     # Define environment strategies
     env_strategies = [
         ("E1", None, "same as query"),
@@ -904,7 +981,7 @@ def run_comprehensive_evaluation(
                         without_siblings=without_siblings,
                         environment=env_value,
                         strategy=agg_value,
-                        output_dir=os.path.join(output_dir, combo_name)
+                        output_dir=output_dir  # Let run_species_evaluation create the folder
                     )
                     
                     # Calculate accuracy

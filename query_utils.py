@@ -588,3 +588,251 @@ def visualize_neighbors(
     canvas_bgr = cv2.cvtColor(np.array(canvas_pil), cv2.COLOR_RGB2BGR)
     cv2.imwrite(output_path, canvas_bgr)
     print(f"Visualization saved to: {output_path}")
+
+
+def visualize_false_prediction(
+    query_image_path: str,
+    neighbors: List[Dict[str, Any]],
+    segmented_image_dir: str,
+    output_path: str,
+    ground_truth_species: str,
+    predicted_species: str,
+    max_neighbors: int = 7,
+    thumbnail_size: tuple[int, int] = (200, 200),
+    query_metadata: Optional[Dict[str, Any]] = None,
+    filter_same_strain: bool = True
+) -> None:
+    """
+    Create a visualization for false predictions showing query image and k nearest neighbors.
+    Neighbors matching ground truth species get green borders, others get red borders.
+    
+    This function handles filtering of same-strain neighbors internally to avoid logic duplication.
+    
+    Args:
+        query_image_path: Path to the query image
+        neighbors: List of neighbor dictionaries from find_nearest_neighbors_*
+        segmented_image_dir: Directory containing segmented images
+        output_path: Path to save the output visualization
+        ground_truth_species: The correct species name
+        predicted_species: The predicted species name
+        max_neighbors: Maximum number of neighbors to display (default: 7)
+        thumbnail_size: Size to resize each image to (width, height)
+        query_metadata: Optional metadata dictionary for the query image
+        filter_same_strain: Whether to filter out neighbors from the same strain as query (default: True)
+    """
+    import os
+    from PIL import Image, ImageDraw, ImageFont
+    
+    # Filter out same-strain neighbors if requested
+    if filter_same_strain and query_metadata:
+        query_strain = query_metadata.get('strain')
+        if query_strain:
+            neighbors = [n for n in neighbors if n.get('strain') != query_strain]
+    
+    # Limit neighbors to max_neighbors
+    neighbors = neighbors[:max_neighbors]
+    
+    # Load query image
+    query_img = cv2.imread(query_image_path)
+    if query_img is None or query_img.size == 0:
+        raise ValueError(f"Failed to read query image from {query_image_path}")
+    
+    # Resize query image
+    query_img_resized = cv2.resize(query_img, thumbnail_size)
+    
+    # Calculate layout dimensions
+    num_images = len(neighbors) + 1  # +1 for query image
+    text_height = 160  # Height for text below each image
+    border_width = 10
+    padding = 20
+    
+    img_width = thumbnail_size[0]
+    img_height = thumbnail_size[1]
+    
+    # Calculate grid layout
+    images_per_row = min(4, num_images)
+    num_rows = (num_images + images_per_row - 1) // images_per_row
+    
+    # Canvas dimensions with extra space for title
+    title_height = 80
+    canvas_width = images_per_row * (img_width + padding) + padding
+    canvas_height = title_height + num_rows * (img_height + text_height + padding) + padding
+    
+    # Create canvas with white background
+    canvas_bgr = np.full((canvas_height, canvas_width, 3), (255, 255, 255), dtype=np.uint8)
+    
+    # Convert to PIL for better text rendering
+    canvas_pil = Image.fromarray(cv2.cvtColor(canvas_bgr, cv2.COLOR_BGR2RGB))
+    draw = ImageDraw.Draw(canvas_pil)
+    
+    # Try to load fonts
+    try:
+        font_title = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 18)
+        font_subtitle = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", 14)
+        font_normal = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", 11)
+        font_small = ImageFont.truetype("/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf", 10)
+    except:
+        try:
+            font_title = ImageFont.truetype("arial.ttf", 18)
+            font_subtitle = ImageFont.truetype("arial.ttf", 14)
+            font_normal = ImageFont.truetype("arial.ttf", 11)
+            font_small = ImageFont.truetype("arial.ttf", 10)
+        except:
+            font_title = ImageFont.load_default()
+            font_subtitle = ImageFont.load_default()
+            font_normal = ImageFont.load_default()
+            font_small = ImageFont.load_default()
+    
+    # Add title at top
+    title_y = 10
+    draw.text((20, title_y), "FALSE PREDICTION ANALYSIS", font=font_title, fill=(255, 0, 0))
+    title_y += 30
+    draw.text((20, title_y), f"Ground Truth: {ground_truth_species}", font=font_subtitle, fill=(0, 100, 0))
+    title_y += 25
+    draw.text((20, title_y), f"Predicted: {predicted_species}", font=font_subtitle, fill=(255, 0, 0))
+    
+    # Helper function to add text
+    def put_text(text: str, position: tuple[int, int], font: Any, 
+                 color: Optional[tuple[int, int, int]] = None) -> int:
+        """Put text and return next y position."""
+        if color is None:
+            color = (0, 0, 0)
+        x, y = position
+        draw.text((x, y), text, font=font, fill=color)
+        bbox = draw.textbbox((x, y), text, font=font)
+        return int(bbox[3] + 5)
+    
+    # Place query image
+    x_offset = padding
+    y_offset = title_height + padding
+    
+    # Add red border to query image (false prediction)
+    query_with_border = cv2.copyMakeBorder(
+        query_img_resized, border_width, border_width, border_width, border_width,
+        cv2.BORDER_CONSTANT, value=(0, 0, 255)  # Red border for false prediction
+    )
+    
+    # Convert to PIL and paste on canvas
+    query_pil = Image.fromarray(cv2.cvtColor(query_with_border, cv2.COLOR_BGR2RGB))
+    canvas_pil.paste(query_pil, (x_offset, y_offset))
+    
+    # Add text below query image
+    y_end = y_offset + query_with_border.shape[0]
+    text_y = y_end + 10
+    text_x = x_offset + 5
+    
+    # Title
+    text_y = put_text("QUERY IMAGE", (text_x, text_y), font_subtitle, (200, 0, 0))
+    
+    # Add query metadata if provided
+    if query_metadata:
+        image_id = query_metadata.get('image_id', 'unknown')
+        if len(image_id) > 28:
+            image_id = image_id[:25] + "..."
+        text_y = put_text(f"ID: {image_id}", (text_x, text_y), font_small)
+        
+        specy = query_metadata.get('specy', ground_truth_species)
+        if len(specy) > 28:
+            specy = specy[:25] + "..."
+        text_y = put_text(f"Species: {specy}", (text_x, text_y), font_normal)
+        
+        strain = query_metadata.get('strain', 'unknown')
+        if len(strain) > 28:
+            strain = strain[:25] + "..."
+        text_y = put_text(f"Strain: {strain}", (text_x, text_y), font_normal)
+        
+        environment = query_metadata.get('environment', 'unknown')
+        text_y = put_text(f"Env: {environment}", (text_x, text_y), font_normal)
+        
+        angle = query_metadata.get('angle', 'unknown')
+        text_y = put_text(f"Angle: {angle}", (text_x, text_y), font_normal)
+    
+    # Move to next position
+    col = 1
+    row = 0
+    
+    # Place neighbor images
+    for idx, neighbor in enumerate(neighbors):
+        # Calculate position
+        if col >= images_per_row:
+            col = 0
+            row += 1
+        
+        x_offset = padding + col * (img_width + padding)
+        y_offset = title_height + padding + row * (img_height + text_height + padding)
+        
+        # Load neighbor image
+        neighbor_img_path = os.path.join(segmented_image_dir, f"{neighbor['image_id']}.jpg")
+        neighbor_img = cv2.imread(neighbor_img_path)
+        
+        if neighbor_img is None or neighbor_img.size == 0:
+            # If image not found, create placeholder
+            neighbor_img = np.full((thumbnail_size[1], thumbnail_size[0], 3), (180, 180, 180), dtype=np.uint8)
+        else:
+            neighbor_img = cv2.resize(neighbor_img, thumbnail_size)
+        
+        # Determine border color based on species match
+        neighbor_species = neighbor.get('specy', 'unknown')
+        if neighbor_species == ground_truth_species:
+            border_color_bgr = (0, 255, 0)  # Green for correct species
+            border_color_rgb = (0, 200, 0)
+        else:
+            border_color_bgr = (0, 0, 255)  # Red for wrong species
+            border_color_rgb = (200, 0, 0)
+        
+        # Add colored border to neighbor image
+        neighbor_with_border = cv2.copyMakeBorder(
+            neighbor_img, border_width, border_width, border_width, border_width,
+            cv2.BORDER_CONSTANT, value=border_color_bgr
+        )
+        
+        # Convert to PIL and paste on canvas
+        y_end = y_offset + neighbor_with_border.shape[0]
+        x_end = x_offset + neighbor_with_border.shape[1]
+        
+        if y_end <= canvas_height and x_end <= canvas_width:
+            neighbor_pil = Image.fromarray(cv2.cvtColor(neighbor_with_border, cv2.COLOR_BGR2RGB))
+            canvas_pil.paste(neighbor_pil, (x_offset, y_offset))
+            
+            # Add text below neighbor image
+            text_y = y_end + 10
+            text_x = x_offset + 5
+            
+            # Rank number
+            text_y = put_text(f"#{idx + 1}", (text_x, text_y), font_subtitle, border_color_rgb)
+            
+            # Image ID
+            image_id = neighbor.get('image_id', 'unknown')
+            if len(image_id) > 28:
+                image_id = image_id[:25] + "..."
+            text_y = put_text(f"ID: {image_id}", (text_x, text_y), font_small)
+            
+            # Species with color indicator
+            specy = neighbor.get('specy', 'unknown')
+            if len(specy) > 28:
+                specy = specy[:25] + "..."
+            text_y = put_text(f"Species: {specy}", (text_x, text_y), font_normal, border_color_rgb)
+            
+            # Strain
+            strain = neighbor.get('strain', 'unknown')
+            if len(strain) > 28:
+                strain = strain[:25] + "..."
+            text_y = put_text(f"Strain: {strain}", (text_x, text_y), font_normal)
+            
+            # Environment
+            environment = neighbor.get('environment', 'unknown')
+            text_y = put_text(f"Env: {environment}", (text_x, text_y), font_normal)
+            
+            angle = neighbor.get('angle', 'unknown')
+            text_y = put_text(f"Angle: {angle}", (text_x, text_y), font_normal)
+            
+            # Similarity score
+            score = neighbor.get('score', 0.0)
+            text_y = put_text(f"Score: {score:.4f}", (text_x, text_y), font_subtitle, (0, 100, 0))
+        
+        col += 1
+    
+    # Convert back to OpenCV format and save
+    canvas_bgr = cv2.cvtColor(np.array(canvas_pil), cv2.COLOR_RGB2BGR)
+    cv2.imwrite(output_path, canvas_bgr)
+    # Don't print - keep output minimal

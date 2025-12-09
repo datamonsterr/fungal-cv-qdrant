@@ -48,7 +48,10 @@ TEST_ENVIRONMENTS = get_environment_list(client, collection_name)
 print(f"Found environments: {TEST_ENVIRONMENTS}\n")
 
 # Output directory
-OUTPUT_DIR = f"./results/comprehensive_k{K}"
+# Include K, WITHOUT_SIBLINGS, and MIN_SAMPLES in the folder name
+sibling_suffix = "NoSib" if WITHOUT_SIBLINGS else "WithSib"
+min_samples_suffix = f"_M{MIN_SAMPLES}" if MIN_SAMPLES is not None else ""
+OUTPUT_DIR = f"./results/comprehensive_k{K}_{sibling_suffix}{min_samples_suffix}_2"
 
 print("\n" + "="*80)
 print("COMPREHENSIVE EVALUATION - ALL STRATEGY COMBINATIONS")
