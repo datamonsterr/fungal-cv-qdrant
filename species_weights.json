@@ -1,0 +1,41 @@
+{
+  "description": "Manual weights for species-specific feature extractor performance. Higher weight = better performance for that species.",
+  "weights": {
+    "Penicillium aurantiogriseum": {
+      "ColorHistogramHS": 1.0,
+      "ResNet50": 0.0,
+      "EfficientNetV2B0": 0.0
+    },
+    "Penicillium cyclopium": {
+      "ColorHistogramHS": 0.5,
+      "ResNet50": 1.0,
+      "EfficientNetV2B0": 0.9
+    },
+    "Penicillium freii": {
+      "ColorHistogramHS": 0.6,
+      "ResNet50": 1.0,
+      "EfficientNetV2B0": 0.8
+    },
+    "Penicillium melanoconidium": {
+      "ColorHistogramHS": 0.5,
+      "ResNet50": 0.9,
+      "EfficientNetV2B0": 1.0
+    },
+    "Penicillium viridicatum": {
+      "ColorHistogramHS": 1.0,
+      "ResNet50": 0.0,
+      "EfficientNetV2B0": 0.0
+    },
+    "default": {
+      "ColorHistogramHS": 1.0,
+      "ResNet50": 0.3,
+      "EfficientNetV2B0": 1.5
+    }
+  },
+  "notes": [
+    "These weights are applied when combining aggregated results from multiple models.",
+    "For each species in the aggregated results, the score is multiplied by the species-specific weight for that model.",
+    "The 'default' weights are used for species not explicitly listed.",
+    "Weights should be > 0. A weight of 0 effectively disables that model for that species."
+  ]
+}

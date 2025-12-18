@@ -51,7 +51,7 @@ print(f"Found environments: {TEST_ENVIRONMENTS}\n")
 # Include K, WITHOUT_SIBLINGS, and MIN_SAMPLES in the folder name
 sibling_suffix = "NoSib" if WITHOUT_SIBLINGS else "WithSib"
 min_samples_suffix = f"_M{MIN_SAMPLES}" if MIN_SAMPLES is not None else ""
-OUTPUT_DIR = f"./results/comprehensive_k{K}_{sibling_suffix}{min_samples_suffix}_3"
+OUTPUT_DIR = f"./results/comprehensive_k{K}_{sibling_suffix}{min_samples_suffix}_6"
 
 print("\n" + "="*80)
 print("COMPREHENSIVE EVALUATION - ALL STRATEGY COMBINATIONS")

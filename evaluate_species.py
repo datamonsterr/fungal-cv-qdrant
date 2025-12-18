@@ -675,19 +675,25 @@ def run_species_evaluation(
         )
         draw_confusion_matrix(results, output_path=cm_path)
         
-        # Generate false prediction visualizations using new comprehensive layout
-        false_predictions = [r for r in results if not r['correct']]
+        # Get segmented image directory from config or default
+        try:
+            from config import SEGMENTED_IMAGE_DIR
+        except:
+            SEGMENTED_IMAGE_DIR = "../Dataset/segmented_image"
+        
+        from visualize_prediction import batch_visualize_predictions
+        
+        # Generate false prediction visualizations (limit to 5)
+        # Exclude Penicillium cyclopium from false prediction visualizations
+        # Filter out cases where ground truth is Penicillium cyclopium
+        false_predictions = [
+            r for r in results 
+            if not r['correct'] and r['ground_truth'] != 'Penicillium cyclopium'
+        ]
+
         if false_predictions:
             false_pred_dir = os.path.join(strategy_dir, "false_predictions")
             os.makedirs(false_pred_dir, exist_ok=True)
-            
-            from visualize_prediction import batch_visualize_predictions
-            
-            # Get segmented image directory from config or default
-            try:
-                from config import SEGMENTED_IMAGE_DIR
-            except:
-                SEGMENTED_IMAGE_DIR = "../Dataset/segmented_image"
             
             try:
                 # Use new comprehensive visualization showing all environments
@@ -697,7 +703,27 @@ def run_species_evaluation(
                     output_dir=false_pred_dir,
                     k=7,  # Show 7 neighbors per environment
                     filter_correct=False,  # Already filtered for false predictions
-                    max_visualizations=10  # Limit to 10 visualizations per evaluation
+                    max_visualizations=5  # Limit to 5 visualizations
+                )
+            except Exception as e:
+                # Silently skip visualization errors to not break evaluation
+                pass
+        
+        # Generate correct prediction visualizations (limit to 5)
+        correct_predictions = [r for r in results if r['correct']]
+        if correct_predictions:
+            correct_pred_dir = os.path.join(strategy_dir, "correct_predictions")
+            os.makedirs(correct_pred_dir, exist_ok=True)
+            
+            try:
+                # Use new comprehensive visualization showing all environments
+                batch_visualize_predictions(
+                    prediction_results=correct_predictions,
+                    segmented_image_dir=SEGMENTED_IMAGE_DIR,
+                    output_dir=correct_pred_dir,
+                    k=7,  # Show 7 neighbors per environment
+                    filter_correct=True,  # Already filtered for correct predictions
+                    max_visualizations=5  # Limit to 5 visualizations
                 )
             except Exception as e:
                 # Silently skip visualization errors to not break evaluation

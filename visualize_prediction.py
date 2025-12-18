@@ -9,6 +9,49 @@ from typing import Dict, List, Any, Optional, Tuple
 from PIL import Image, ImageDraw, ImageFont
 
 
+def generate_distinct_color(species_name: str, ground_truth: str) -> Tuple[int, int, int]:
+    """
+    Generate a distinct color for a species based on its name.
+    Ground truth species always gets green.
+    Other species get distinct colors from a predefined palette.
+    
+    Args:
+        species_name: Name of the species
+        ground_truth: Name of the ground truth species
+        
+    Returns:
+        RGB color tuple (for BGR format, will be reversed when used)
+    """
+    if species_name == ground_truth:
+        return (0, 255, 0)  # Green for ground truth
+    
+    # Predefined color palette (avoiding green for ground truth)
+    # These are vibrant, distinct colors in RGB format
+    COLOR_PALETTE = [
+        (255, 0, 0),      # Red
+        (0, 0, 255),      # Blue
+        (255, 165, 0),    # Orange
+        (148, 0, 211),    # Purple
+        (255, 20, 147),   # Deep Pink
+        (0, 191, 255),    # Deep Sky Blue
+        (255, 215, 0),    # Gold
+        (220, 20, 60),    # Crimson
+        (138, 43, 226),   # Blue Violet
+        (255, 105, 180),  # Hot Pink
+        (70, 130, 180),   # Steel Blue
+        (255, 69, 0),     # Red Orange
+        (186, 85, 211),   # Medium Orchid
+        (30, 144, 255),   # Dodger Blue
+        (255, 140, 0),    # Dark Orange
+    ]
+    
+    # Use hash to consistently assign the same color to the same species
+    hash_val = abs(hash(species_name))
+    color_index = hash_val % len(COLOR_PALETTE)
+    
+    return COLOR_PALETTE[color_index]
+
+
 def visualize_prediction_by_environment(
     prediction_result: Dict[str, Any],
     segmented_image_dir: str,
@@ -48,6 +91,13 @@ def visualize_prediction_by_environment(
     feature_extractor = prediction_result['feature_extractor']
     aggregation_strategy = prediction_result['strategy'].upper()
     raw_results = prediction_result['raw_results']
+    aggregated_results = prediction_result.get('aggregated_results', [])
+    
+    # Create a species-to-rank mapping for quick lookup
+    species_rank_map = {}
+    for rank, agg_result in enumerate(aggregated_results, start=1):
+        specy = agg_result.get('specy', agg_result.get('species', 'unknown'))
+        species_rank_map[specy] = rank
     
     # Determine environment strategy
     env_filter = prediction_result.get('environment')
@@ -67,10 +117,10 @@ def visualize_prediction_by_environment(
     
     # Layout parameters
     img_width, img_height = thumbnail_size
-    text_height = 120  # Height for text below each image
-    header_height = 120  # Height for title section
+    text_height = 90  # Height for text below each image (5 lines of text)
+    header_height = 180  # Increased height for title section + ranking legend
     padding = 15
-    row_spacing = 30  # Extra space between rows
+    row_spacing = 100  # Extra gap between rows to prevent overlap
     
     # Calculate canvas dimensions
     images_per_row = k + 1  # Query + K neighbors
@@ -111,23 +161,78 @@ def visualize_prediction_by_environment(
         bbox = draw.textbbox(position, text, font=font)
         return bbox[3]  # Return bottom y coordinate
     
-    # Draw header section
+    # Draw header section with two columns
     header_y = 15
+    
+    # LEFT COLUMN: Prediction metadata
+    left_x = padding
     
     # Title with color based on correctness
     title_color = (0, 150, 0) if is_correct else (200, 0, 0)
     status = "CORRECT PREDICTION" if is_correct else "FALSE PREDICTION"
-    header_y = put_text(status, (padding, header_y), font_title, title_color) + 8
+    header_y = put_text(status, (left_x, header_y), font_title, title_color) + 8
     
     # Prediction details
-    header_y = put_text(f"Ground Truth: {ground_truth}", (padding, header_y), font_subtitle, (0, 100, 0)) + 5
+    header_y = put_text(f"Ground Truth: {ground_truth}", (left_x, header_y), font_subtitle, (0, 100, 0)) + 5
     pred_color = (0, 100, 0) if is_correct else (200, 0, 0)
     header_y = put_text(f"Predicted: {predicted_specy} (Confidence: {confidence:.3f})", 
-                       (padding, header_y), font_subtitle, pred_color) + 5
+                       (left_x, header_y), font_subtitle, pred_color) + 5
     
     # Strategy info
-    strategy_text = f"Strategy: {env_strategy} | Aggregation: {aggregation_strategy} | Feature: {feature_extractor} | K={k}"
-    put_text(strategy_text, (padding, header_y), font_normal, (80, 80, 80))
+    strategy_text = f"Strategy: {env_strategy} | Aggregation: {aggregation_strategy}"
+    header_y = put_text(strategy_text, (left_x, header_y), font_normal, (80, 80, 80)) + 3
+    feature_text = f"Feature: {feature_extractor} | K={k}"
+    put_text(feature_text, (left_x, header_y), font_normal, (80, 80, 80))
+    
+    # RIGHT COLUMN: Aggregated results ranking
+    if aggregated_results:
+        # Calculate right column position (roughly half the canvas width)
+        right_x = canvas_width // 2 + 20
+        rank_y = 15
+        
+        # Title for ranking
+        put_text("Aggregated Results:", (right_x, rank_y), font_subtitle, (80, 80, 80))
+        rank_y += 22
+        
+        max_species_to_show = min(8, len(aggregated_results))  # Show top 8 species
+        
+        for rank, agg_result in enumerate(aggregated_results[:max_species_to_show], start=1):
+            specy = agg_result.get('specy', agg_result.get('species', 'unknown'))
+            score = agg_result.get('score', 0.0)
+            
+            # Get species color
+            species_color = generate_distinct_color(specy, ground_truth)
+            
+            # Draw rank badge (small circle with number)
+            badge_size = 18
+            badge_x = right_x
+            badge_y_center = rank_y + 5
+            
+            draw.ellipse(
+                [(badge_x, badge_y_center - badge_size//2), 
+                 (badge_x + badge_size, badge_y_center + badge_size//2)],
+                fill=species_color,
+                outline=(255, 255, 255),
+                width=1
+            )
+            
+            # Draw rank number
+            rank_text = str(rank)
+            bbox = draw.textbbox((0, 0), rank_text, font=font_small)
+            text_width = bbox[2] - bbox[0]
+            text_height = bbox[3] - bbox[1]
+            rank_text_x = badge_x + (badge_size - text_width) // 2
+            rank_text_y = badge_y_center - text_height // 2 - 1
+            draw.text((rank_text_x, rank_text_y), rank_text, fill=(255, 255, 255), font=font_small)
+            
+            # Draw species name and score
+            text_x = badge_x + badge_size + 8
+            # Truncate species name to fit in right column
+            max_species_len = 30
+            species_display = specy[:max_species_len] + "..." if len(specy) > max_species_len else specy
+            put_text(f"{species_display}: {score:.4f}", (text_x, rank_y), font_small, species_color)
+            
+            rank_y += 16
     
     # Draw separator line
     line_y = header_height - 10
@@ -162,8 +267,14 @@ def visualize_prediction_by_environment(
         query_img_resized = cv2.resize(query_img, thumbnail_size)
         images_loaded += 1
         
-        # Determine border color for query (always use prediction result color)
-        border_color_bgr = (0, 255, 0) if is_correct else (0, 0, 255)  # Green if correct, red if false
+        # Determine border color for query
+        # Green if correct, otherwise use the predicted species color
+        if is_correct:
+            query_border_rgb = (0, 255, 0)
+        else:
+            query_border_rgb = generate_distinct_color(predicted_specy, ground_truth)
+        
+        border_color_bgr = query_border_rgb[::-1]  # Convert RGB to BGR
         
         # Add border to query image
         query_with_border = cv2.copyMakeBorder(
@@ -216,13 +327,10 @@ def visualize_prediction_by_environment(
             neighbor_img_resized = cv2.resize(neighbor_img, thumbnail_size)
             images_loaded += 1
             
-            # Determine border color (green if matches ground truth, red otherwise)
-            if neighbor_specy == ground_truth:
-                neighbor_border_color = (0, 255, 0)  # Green
-                neighbor_text_color = (0, 150, 0)
-            else:
-                neighbor_border_color = (0, 0, 255)  # Red
-                neighbor_text_color = (200, 0, 0)
+            # Generate distinct color based on species name
+            species_color_rgb = generate_distinct_color(neighbor_specy, ground_truth)
+            neighbor_border_color = species_color_rgb[::-1]  # Convert RGB to BGR for OpenCV
+            neighbor_text_color = species_color_rgb  # Keep RGB for PIL text
             
             # Add border to neighbor image
             neighbor_with_border = cv2.copyMakeBorder(
@@ -233,6 +341,36 @@ def visualize_prediction_by_environment(
             # Place neighbor image
             neighbor_pil = Image.fromarray(cv2.cvtColor(neighbor_with_border, cv2.COLOR_BGR2RGB))
             canvas_pil.paste(neighbor_pil, (x_offset, current_y))
+            
+            # Add rank badge in top-right corner if species is in aggregated results
+            specy_rank = species_rank_map.get(neighbor_specy)
+            if specy_rank:
+                # Create a small badge for the rank
+                badge_size = 28
+                badge_x = x_offset + neighbor_with_border.shape[1] - badge_size - 3
+                badge_y = current_y + 3
+                
+                # Use the same color as the border/text for consistency
+                badge_color = neighbor_text_color
+                
+                # Draw filled circle for badge background
+                draw.ellipse(
+                    [(badge_x, badge_y), (badge_x + badge_size, badge_y + badge_size)],
+                    fill=badge_color,
+                    outline=(255, 255, 255),  # White outline for better visibility
+                    width=2
+                )
+                
+                # Draw rank number in white for better contrast
+                rank_text = str(specy_rank)
+                # Center the text in the circle
+                bbox = draw.textbbox((0, 0), rank_text, font=font_subtitle)
+                text_width = bbox[2] - bbox[0]
+                text_height = bbox[3] - bbox[1]
+                rank_text_x = badge_x + (badge_size - text_width) // 2
+                rank_text_y = badge_y + (badge_size - text_height) // 2 - 2
+                
+                draw.text((rank_text_x, rank_text_y), rank_text, fill=(255, 255, 255), font=font_subtitle)
             
             # Add text below neighbor image
             text_y = current_y + neighbor_with_border.shape[0] + 5
