@@ -12,7 +12,7 @@ from tensorflow.keras.applications import ResNet50, EfficientNetV2B0, MobileNetV
 from tensorflow.keras.applications.resnet50 import preprocess_input as resnet_preprocess  # type: ignore
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input as efficientnetv2_preprocess  # type: ignore
 from tensorflow.keras.applications.mobilenet_v2 import preprocess_input as mobilenetv2_preprocess  # type: ignore
-from tensorflow.keras.models import Model  # type: ignore
+from tensorflow.keras.models import Model, load_model  # type: ignore
 from tensorflow.keras.layers import Input  # type: ignore
 
 ssl._create_default_https_context = ssl._create_unverified_context  # type: ignore
@@ -234,13 +234,44 @@ class ColorHistogramHSExtractor(FeatureExtractor):
 class ResNet50Extractor(FeatureExtractor):
     """ResNet50 feature extractor (without final classification layer)."""
     
-    def __init__(self, target_size: Tuple[int, int] = (224, 224)):
+    def __init__(self, target_size: Tuple[int, int] = (224, 224), weights_path: str | None = None):
         super().__init__("ResNet50")
         self.target_size = target_size
         
-        # Load ResNet50 without top layer
-        base_model = ResNet50(weights='imagenet', include_top=False, pooling='avg')  # type: ignore
-        self.model: Any = Model(inputs=base_model.input, outputs=base_model.output)  # type: ignore
+        # Load fine-tuned weights if provided
+        if weights_path and os.path.exists(weights_path):
+            print(f"Loading fine-tuned ResNet50 weights from: {weights_path}")
+            try:
+                # Load the full fine-tuned model (includes classification head)
+                full_model = load_model(weights_path)
+                
+                # Extract features from GlobalAveragePooling2D layer (before classification head)
+                # Architecture: Input -> BaseModel -> GlobalAveragePooling2D -> Dropout -> Dense -> Dropout -> Dense
+                # We want output from GlobalAveragePooling2D (layer index 2)
+                gap_layer = None
+                for layer in full_model.layers:
+                    if 'global_average_pooling' in layer.name.lower():
+                        gap_layer = layer
+                        break
+                
+                if gap_layer is None:
+                    # Fallback: try to find by index (GlobalAveragePooling is typically layer 2)
+                    gap_layer = full_model.layers[2]
+                
+                # Create feature extractor model: input to GAP output
+                self.model = Model(inputs=full_model.input, outputs=gap_layer.output)
+                print(f"✓ Fine-tuned weights loaded, extracting from layer: {gap_layer.name}")
+            except Exception as e:
+                print(f"Warning: Failed to load fine-tuned weights: {e}")
+                print("Using ImageNet weights instead")
+                # Fallback to ImageNet weights
+                base_model = ResNet50(weights='imagenet', include_top=False, pooling='avg')
+                self.model = Model(inputs=base_model.input, outputs=base_model.output)
+        else:
+            # Load ResNet50 with ImageNet weights
+            base_model = ResNet50(weights='imagenet', include_top=False, pooling='avg')
+            self.model = Model(inputs=base_model.input, outputs=base_model.output)
+        
         self._feature_dim = 2048  # ResNet50 output dimension
     
     def extract(self, image: np.ndarray) -> np.ndarray:
@@ -270,14 +301,44 @@ class ResNet50Extractor(FeatureExtractor):
 class MobileNetV2Extractor(FeatureExtractor):
     """MobileNetV2 feature extractor (without final classification layer)."""
     
-    def __init__(self, target_size: Tuple[int, int] = (224, 224)):
+    def __init__(self, target_size: Tuple[int, int] = (224, 224), weights_path: str | None = None):
         super().__init__("MobileNetV2")
         self.target_size = target_size
         
         ssl._create_default_https_context = ssl._create_unverified_context  # type: ignore
-        base_model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg')  # type: ignore
         
-        self.model: Any = Model(inputs=base_model.input, outputs=base_model.output)  # type: ignore
+        # Load fine-tuned weights if provided
+        if weights_path and os.path.exists(weights_path):
+            print(f"Loading fine-tuned MobileNetV2 weights from: {weights_path}")
+            try:
+                # Load the full fine-tuned model (includes classification head)
+                full_model = load_model(weights_path)
+                
+                # Extract features from GlobalAveragePooling2D layer (before classification head)
+                gap_layer = None
+                for layer in full_model.layers:
+                    if 'global_average_pooling' in layer.name.lower():
+                        gap_layer = layer
+                        break
+                
+                if gap_layer is None:
+                    # Fallback: try to find by index
+                    gap_layer = full_model.layers[2]
+                
+                # Create feature extractor model: input to GAP output
+                self.model = Model(inputs=full_model.input, outputs=gap_layer.output)
+                print(f"✓ Fine-tuned weights loaded, extracting from layer: {gap_layer.name}")
+            except Exception as e:
+                print(f"Warning: Failed to load fine-tuned weights: {e}")
+                print("Using ImageNet weights instead")
+                # Fallback to ImageNet weights
+                base_model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg')
+                self.model = Model(inputs=base_model.input, outputs=base_model.output)
+        else:
+            # Load MobileNetV2 with ImageNet weights
+            base_model = MobileNetV2(weights='imagenet', include_top=False, pooling='avg')
+            self.model = Model(inputs=base_model.input, outputs=base_model.output)
+        
         self._feature_dim = 1280  # MobileNetV2 output dimension
     
     def extract(self, image: np.ndarray) -> np.ndarray:
@@ -307,19 +368,45 @@ class MobileNetV2Extractor(FeatureExtractor):
 
 class EfficientNetV2B0Extractor(FeatureExtractor):
     """EfficientNetV2B0 feature extractor (without final classification layer)."""
-    def __init__(self, target_size: Tuple[int, int] = (224, 224)):
+    def __init__(self, target_size: Tuple[int, int] = (224, 224), weights_path: str | None = None):
         super().__init__("EfficientNetV2B0")
         self.target_size = target_size
 
         # Ensure SSL context is set for model downloads
         ssl._create_default_https_context = ssl._create_unverified_context
         
-        base_model = EfficientNetV2B0(
-            weights='imagenet',
-            include_top=False,
-            pooling='avg'
-        )
-        self.model = base_model
+        # Load fine-tuned weights if provided
+        if weights_path and os.path.exists(weights_path):
+            print(f"Loading fine-tuned EfficientNetV2B0 weights from: {weights_path}")
+            try:
+                # Load the full fine-tuned model (includes classification head)
+                full_model = load_model(weights_path)
+                
+                # Extract features from GlobalAveragePooling2D layer (before classification head)
+                gap_layer = None
+                for layer in full_model.layers:
+                    if 'global_average_pooling' in layer.name.lower():
+                        gap_layer = layer
+                        break
+                
+                if gap_layer is None:
+                    # Fallback: try to find by index
+                    gap_layer = full_model.layers[2]
+                
+                # Create feature extractor model: input to GAP output
+                self.model = Model(inputs=full_model.input, outputs=gap_layer.output)
+                print(f"✓ Fine-tuned weights loaded, extracting from layer: {gap_layer.name}")
+            except Exception as e:
+                print(f"Warning: Failed to load fine-tuned weights: {e}")
+                print("Using ImageNet weights instead")
+                # Fallback to ImageNet weights
+                base_model = EfficientNetV2B0(weights='imagenet', include_top=False, pooling='avg')
+                self.model = base_model
+        else:
+            # Load EfficientNetV2B0 with ImageNet weights
+            base_model = EfficientNetV2B0(weights='imagenet', include_top=False, pooling='avg')
+            self.model = base_model
+        
         self._feature_dim = 1280
 
     def extract(self, image: np.ndarray) -> np.ndarray:
@@ -333,6 +420,48 @@ class EfficientNetV2B0Extractor(FeatureExtractor):
 
     def get_feature_names(self) -> List[str]:
         return [f"efficientnetv2b0_{i}" for i in range(self._feature_dim)]
+
+
+class ColorHistogramHSconcatResnet50(FeatureExtractor):
+    """
+    Concatenated feature extractor combining ColorHistogramHS and ResNet50.
+    ColorHistogramHS features are weighted more heavily (3x) before concatenation.
+    """
+    
+    def __init__(self, 
+                 hist_weight: float = 3.0,
+                 bins: int = 32, 
+                 hist_target_size: Tuple[int, int] = (128, 128),
+                 resnet_target_size: Tuple[int, int] = (224, 224)):
+        super().__init__("ColorHistogramHSconcatResnet50")
+        self.hist_weight = hist_weight
+        self.hist_extractor = ColorHistogramHSExtractor(bins=bins, target_size=hist_target_size)
+        self.resnet_extractor = ResNet50Extractor(target_size=resnet_target_size)
+        # Feature dimensions: ColorHistogramHS = 64 (32 bins x 2 channels), ResNet50 = 2048
+        self._feature_dim = 64 + 2048
+    
+    def extract(self, image: np.ndarray) -> np.ndarray:
+        """Extract concatenated features with weighted ColorHistogramHS."""
+        # Extract ColorHistogramHS features
+        hist_features = self.hist_extractor.extract(image)
+        
+        # Extract ResNet50 features
+        resnet_features = self.resnet_extractor.extract(image)
+        
+        # Weight the histogram features
+        weighted_hist = hist_features * self.hist_weight
+        
+        # Concatenate features
+        concat_features = np.concatenate([weighted_hist, resnet_features])
+        
+        # Apply L2 normalization to the concatenated vector
+        return l2_normalize(concat_features)
+    
+    def get_feature_names(self) -> List[str]:
+        """Get feature names for concatenated features."""
+        hist_names = [f"weighted_hist_{name}" for name in self.hist_extractor.get_feature_names()]
+        resnet_names = self.resnet_extractor.get_feature_names()
+        return hist_names + resnet_names
 
 
 def extract_features_from_dataset(
@@ -463,7 +592,7 @@ def main() -> None:
     # Base paths - these are the actual existing files
     SEGMENT_IMAGE_PATH = "../Dataset/segmented_image"
     SEGMENT_METADATA_PATH = "../Dataset/segmented_image_metadata.json"
-    BASE_OUTPUT_JSON_PATH = "../Dataset/segmented_features"
+    BASE_OUTPUT_JSON_PATH = "../Dataset/segmented_features_finetuned"
     
     # Get versioned output path (automatically increments version)
     OUTPUT_JSON_PATH = get_next_version(BASE_OUTPUT_JSON_PATH, extension=".json")
@@ -472,17 +601,21 @@ def main() -> None:
     print(f"Using metadata path: {SEGMENT_METADATA_PATH}")
     print(f"Output will be saved to: {OUTPUT_JSON_PATH}\n")
     
-    # Initialize feature extractors
+    # Initialize feature extractors - using only the new concatenated extractor
+    # Paths to fine-tuned weights
+    RESNET50_WEIGHTS = "./weights/resnet50/20251229_214513/best_model.h5"
+    MOBILENETV2_WEIGHTS = "./weights/mobilenetv2/20251229_223112/best_model.h5"
+    EFFICIENTNETV2B0_WEIGHTS = "./weights/efficientnetv2b0/20251229_225347/best_model.h5"
+    
     extractors: List[FeatureExtractor] = [
-        # HOG with reduced dimensions: ~945 instead of ~3780
-        # Increased pixels_per_cell from (8,8) to (16,16)
-        HOGExtractor(orientations=9, pixels_per_cell=(16, 16), cells_per_block=(2, 2)),
-        GaborExtractor(frequencies=[0.1, 0.2, 0.3, 0.4], thetas=[0, np.pi/4, np.pi/2, 3*np.pi/4]),
-        ColorHistogramExtractor(bins=32),
-        ColorHistogramHSExtractor(bins=32),
-        ResNet50Extractor(),
-        MobileNetV2Extractor(),
-        EfficientNetV2B0Extractor()
+        ColorHistogramHSconcatResnet50(hist_weight=3.0, bins=32),
+        ColorHistogramHSExtractor(),
+        ResNet50Extractor(weights_path=RESNET50_WEIGHTS),  # Using fine-tuned weights
+        GaborExtractor(),
+        HOGExtractor(),
+        ColorHistogramExtractor(),
+        MobileNetV2Extractor(weights_path=MOBILENETV2_WEIGHTS),  # Using fine-tuned weights
+        EfficientNetV2B0Extractor(weights_path=EFFICIENTNETV2B0_WEIGHTS)  # Using fine-tuned weights
     ]
     
     # Extract features
@@ -503,3 +636,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

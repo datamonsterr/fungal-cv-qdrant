@@ -8,6 +8,8 @@ from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams, PointStruct
 
 
+FULL_SIMPLE_COLLECTION_NAME = "myco_fungi_features_full"
+
 def create_collection(
     client: QdrantClient,
     collection_name: str,
@@ -162,8 +164,8 @@ def main() -> None:
     """Main function to upload features to Qdrant."""
     # Configuration
     QDRANT_URL = "http://localhost:6333"
-    COLLECTION_NAME = "myco_fungi_features_full"
-    FEATURES_JSON_PATH = "../Dataset/segmented_features_1.json"
+    COLLECTION_NAME = "myco_fungi_concat_features_manual"
+    FEATURES_JSON_PATH = "../Dataset/segmented_features_finetuned_1.json"
     METADATA_JSON_PATH = "../Dataset/segmented_image_metadata.json"
     BATCH_SIZE = 100
     

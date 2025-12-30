@@ -253,12 +253,13 @@ def collect_testset(
     
     For E1/E2: Each test set has one image from each environment (e.g., 7 images per set if 7 envs)
     For E3: Each test set has one image from the specific environment (1 image per set)
+    For E4: Each test set has one image from each environment EXCEPT the excluded one
     
     Args:
         client: Qdrant client instance
         collection_name: Name of Qdrant collection
         strain: Strain name
-        environment_strategy: Environment strategy ("E1", "E2", or "E3_<env_name>")
+        environment_strategy: Environment strategy ("E1", "E2", "E3_<env_name>", or "E4_<env_name>")
         
     Returns:
         List of test sets, where each test set is a list of image metadata dicts
@@ -269,11 +270,16 @@ def collect_testset(
         
         For E3_PDA with 6 images in PDA environment:
         Returns 6 test sets, each with 1 image from PDA
+        
+        For E4_CREA with 7 environments and 6 images per env:
+        Returns 6 test sets, each with 6 images (one per environment except CREA)
     """
-    # Determine if E3 and extract environment name
+    # Determine strategy type and extract environment name
     if environment_strategy.startswith("E3_"):
         is_e3 = True
+        is_e4 = False
         target_env = environment_strategy[3:]  # Extract environment name after "E3_"
+        exclude_env = None
         # Get images from specific environment only
         strain_images = get_all_images_for_strain(
             client=client,
@@ -281,10 +287,24 @@ def collect_testset(
             strain=strain,
             environment=target_env
         )
+    elif environment_strategy.startswith("E4_"):
+        # E4: Get ALL images but will exclude specific environment from test sets
+        is_e3 = False
+        is_e4 = True
+        target_env = None
+        exclude_env = environment_strategy[3:]  # Extract environment name after "E4_"
+        strain_images = get_all_images_for_strain(
+            client=client,
+            collection_name=collection_name,
+            strain=strain,
+            environment=None
+        )
     else:
         # E1 or E2: Get ALL images from ALL environments
         is_e3 = False
+        is_e4 = False
         target_env = None
+        exclude_env = None
         strain_images = get_all_images_for_strain(
             client=client,
             collection_name=collection_name,
@@ -303,46 +323,73 @@ def collect_testset(
             test_sets.append([img])
         return test_sets
     else:
-        # E1/E2: Create test sets with one image per environment
-        # Group images by environment and segment_index
-        env_segment_images = defaultdict(lambda: defaultdict(list))
+        # E1/E2/E4: Create test sets with one image per environment
+        # Group images by environment, segment_index, and angle
+        env_segment_angle_images = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
         
         for img in strain_images:
             env = img.get('environment', 'unknown')
+            # Skip excluded environment for E4 strategy
+            if is_e4 and env == exclude_env:
+                continue
             segment_idx = img.get('segment_index', 0)
-            env_segment_images[env][segment_idx].append(img)
+            angle = img.get('angle', 'unknown')
+            env_segment_angle_images[env][segment_idx][angle].append(img)
         
-        # Determine how many test sets we can create (max 6)
-        # Each test set needs one image from each environment
-        max_test_sets = 6
+        # Create test sets based on segment_index and angle combinations
+        # With 3 segments (0,1,2) and 2 angles (ob/obverse, rev/reverse), we get 6 unique test sets
         test_sets = []
         
-        # For each segment index (0-5), create a test set
-        for test_set_idx in range(max_test_sets):
+        # Define test set configurations: (segment_index, preferred_angle)
+        # This ensures each test set uses a unique combination of segment and angle
+        test_configs = [
+            (0, 'ob'), (0, 'rev'),
+            (1, 'ob'), (1, 'rev'),
+            (2, 'ob'), (2, 'rev'),
+        ]
+        
+        for segment_idx, preferred_angle in test_configs:
             test_set = []
             
-            # For each environment, pick the image with this segment_index
-            for env in sorted(env_segment_images.keys()):
-                segment_images = env_segment_images[env]
+            # For each environment, pick the image with this segment_index and angle
+            for env in sorted(env_segment_angle_images.keys()):
+                segment_images = env_segment_angle_images[env]
                 
-                # Try to get image with current segment_index
-                if test_set_idx in segment_images and segment_images[test_set_idx]:
-                    # Prioritize obverse angle
-                    candidates = segment_images[test_set_idx]
-                    obverse_imgs = [img for img in candidates if img.get('angle', '').lower() == 'obverse']
-                    if obverse_imgs:
-                        test_set.append(obverse_imgs[0])
-                    else:
-                        test_set.append(candidates[0])
-                else:
-                    # Fallback: use any available image from this environment
-                    for segment_idx in sorted(segment_images.keys()):
-                        if segment_images[segment_idx]:
-                            test_set.append(segment_images[segment_idx][0])
+                # Try to get image with current segment_index and preferred angle
+                img_selected = None
+                if segment_idx in segment_images:
+                    # Try preferred angle first (supporting both 'ob'/'rev' and 'obverse'/'reverse')
+                    angle_variations = {
+                        'ob': ['ob', 'obverse'],
+                        'rev': ['rev', 'reverse']
+                    }
+                    for angle_var in angle_variations.get(preferred_angle, [preferred_angle]):
+                        if angle_var in segment_images[segment_idx] and segment_images[segment_idx][angle_var]:
+                            img_selected = segment_images[segment_idx][angle_var][0]
                             break
+                    
+                    # If preferred angle not found, use any angle from this segment
+                    if img_selected is None:
+                        for angle in segment_images[segment_idx]:
+                            if segment_images[segment_idx][angle]:
+                                img_selected = segment_images[segment_idx][angle][0]
+                                break
+                
+                # Fallback: use any available image from this environment
+                if img_selected is None:
+                    for seg_idx in sorted(segment_images.keys()):
+                        for angle in segment_images[seg_idx]:
+                            if segment_images[seg_idx][angle]:
+                                img_selected = segment_images[seg_idx][angle][0]
+                                break
+                        if img_selected is not None:
+                            break
+                
+                if img_selected is not None:
+                    test_set.append(img_selected)
             
             # Only add test set if it has images from all environments
-            if test_set and len(test_set) == len(env_segment_images):
+            if test_set and len(test_set) == len(env_segment_angle_images):
                 test_sets.append(test_set)
         
         return test_sets
@@ -398,11 +445,21 @@ def predict_segment_group(
         img_environment = image_data.get('environment', 'unknown')
         
         # Determine environment filter
+        search_environment = None
+        exclude_environment = None
+        
         if environment is None:
+            # E1: Use same environment as query image
             search_environment = img_environment
         elif environment.lower() == "all":
+            # E2: No environment filter
+            search_environment = None
+        elif environment.startswith("E4_"):
+            # E4: Exclude specific environment
+            exclude_environment = environment[3:]  # Extract environment name after "E4_"
             search_environment = None
         else:
+            # E3: Use specified environment
             search_environment = environment
         
         try:
@@ -414,7 +471,8 @@ def predict_segment_group(
                 feature_type=feature_extractor.name.lower(),
                 num_neighbors=k * 2 if without_siblings else k,
                 environment=search_environment,
-                exclude_self=True
+                exclude_self=True,
+                exclude_environment=exclude_environment
             )
             
             # Filter siblings if requested
@@ -502,11 +560,17 @@ def run_species_evaluation(
     - E3 (environment=specific, e.g., "PDA"): Create 6 test sets from specific environment.
       Each test set has 1 image. Evaluate WITH environment filter.
       Result: 6 predictions per strain.
+      
+    - E4 (environment="E4_<env>", e.g., "E4_CREA"): Create 6 test sets EXCLUDING specific environment.
+      Each test set has images from all environments EXCEPT the excluded one.
+      Query searches database EXCLUDING the same environment.
+      Result: 6 predictions per strain (using images from N-1 environments).
     
     Example: For 8 test strains:
       - E1: 8 strains × 6 test sets = 48 predictions
       - E2: 8 strains × 6 test sets = 48 predictions
       - E3: 8 strains × 6 test sets = 48 predictions
+      - E4: 8 strains × 6 test sets = 48 predictions
     
     Args:
         client: Qdrant client instance
@@ -519,6 +583,7 @@ def run_species_evaluation(
                     - None: E1 strategy (6 test sets with one img per env each)
                     - "all": E2 strategy (6 test sets with one img per env each)
                     - specific name: E3 strategy (6 test sets with 1 img each from that env)
+                    - "E4_<env>": E4 strategy (6 test sets with one img per env, excluding <env>)
         strategy: Aggregation strategy - "avg" or "uni"
         output_dir: Output directory for results
         
@@ -534,6 +599,11 @@ def run_species_evaluation(
         eval_strategy = "E2"
         env_strategy_code = "E2"
         env_folder_suffix = ""  # No environment in folder name for E2
+    elif environment.startswith("E4_"):
+        eval_strategy = "E4"
+        excluded_env = environment[3:]
+        env_strategy_code = f"E4_{excluded_env}"
+        env_folder_suffix = f"_{excluded_env}"  # Include excluded environment in folder name
     else:
         eval_strategy = "E3"
         env_strategy_code = f"E3_{environment}"
@@ -703,7 +773,7 @@ def run_species_evaluation(
                     output_dir=false_pred_dir,
                     k=7,  # Show 7 neighbors per environment
                     filter_correct=False,  # Already filtered for false predictions
-                    max_visualizations=5  # Limit to 5 visualizations
+                    max_visualizations=20 # Limit to 5 visualizations
                 )
             except Exception as e:
                 # Silently skip visualization errors to not break evaluation
@@ -723,7 +793,7 @@ def run_species_evaluation(
                     output_dir=correct_pred_dir,
                     k=7,  # Show 7 neighbors per environment
                     filter_correct=True,  # Already filtered for correct predictions
-                    max_visualizations=5  # Limit to 5 visualizations
+                    max_visualizations=20 # Limit to 5 visualizations
                 )
             except Exception as e:
                 # Silently skip visualization errors to not break evaluation
@@ -969,6 +1039,8 @@ def run_comprehensive_evaluation(
     if test_environments:
         for env in test_environments:
             env_strategies.append((f"E3_{env}", env, env))
+            # Add E4 strategy - exclude this environment
+            env_strategies.append((f"E4_{env}", f"E4_{env}", f"exclude {env}"))
     
     # Define aggregation strategies
     agg_strategies = [

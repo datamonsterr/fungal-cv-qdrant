@@ -267,12 +267,9 @@ def visualize_prediction_by_environment(
         query_img_resized = cv2.resize(query_img, thumbnail_size)
         images_loaded += 1
         
-        # Determine border color for query
-        # Green if correct, otherwise use the predicted species color
-        if is_correct:
-            query_border_rgb = (0, 255, 0)
-        else:
-            query_border_rgb = generate_distinct_color(predicted_specy, ground_truth)
+        # Query image border should always be green (ground truth color)
+        # The query image represents the actual ground truth species
+        query_border_rgb = (0, 255, 0)  # Always green for ground truth
         
         border_color_bgr = query_border_rgb[::-1]  # Convert RGB to BGR
         

@@ -36,7 +36,8 @@ def build_filter(
     angle: Optional[str] = None,
     strain: Optional[str] = None,
     specy: Optional[str] = None,
-    parent_id: Optional[str] = None
+    parent_id: Optional[str] = None,
+    exclude_environment: Optional[str] = None
 ) -> Optional[Filter]:
     """
     Build a Qdrant filter based on metadata conditions.
@@ -47,15 +48,23 @@ def build_filter(
         strain: Filter by strain (e.g., "DTO 123-A1")
         specy: Filter by species name
         parent_id: Filter by parent image ID
+        exclude_environment: Exclude specific environment (for E4 strategy)
         
     Returns:
         Qdrant Filter object or None if no filters specified
     """
     conditions = []
+    exclude_conditions = []
     
     if environment is not None:
         conditions.append(
             FieldCondition(key="environment", match=MatchValue(value=environment))
+        )
+    
+    if exclude_environment is not None:
+        # Use must_not to exclude specific environment
+        exclude_conditions.append(
+            FieldCondition(key="environment", match=MatchValue(value=exclude_environment))
         )
     
     if angle is not None:
@@ -78,10 +87,14 @@ def build_filter(
             FieldCondition(key="parent_id", match=MatchValue(value=parent_id))
         )
     
-    if not conditions:
+    # Build filter with must and must_not conditions
+    if not conditions and not exclude_conditions:
         return None
     
-    return Filter(must=conditions)
+    if exclude_conditions:
+        return Filter(must=conditions if conditions else None, must_not=exclude_conditions)
+    else:
+        return Filter(must=conditions)
 
 
 def find_nearest_neighbors_by_id(
@@ -94,7 +107,8 @@ def find_nearest_neighbors_by_id(
     angle: Optional[str] = None,
     strain: Optional[str] = None,
     specy: Optional[str] = None,
-    exclude_self: bool = True
+    exclude_self: bool = True,
+    exclude_environment: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Find nearest neighbors using an image ID already in the collection.
@@ -110,6 +124,7 @@ def find_nearest_neighbors_by_id(
         strain: Filter by strain
         specy: Filter by species
         exclude_self: Whether to exclude the query image from results
+        exclude_environment: Exclude specific environment (for E4 strategy)
         
     Returns:
         List of dictionaries containing neighbor information
@@ -141,7 +156,8 @@ def find_nearest_neighbors_by_id(
         environment=environment,
         angle=angle,
         strain=strain,
-        specy=specy
+        specy=specy,
+        exclude_environment=exclude_environment
     )
     
     # Adjust limit if excluding self

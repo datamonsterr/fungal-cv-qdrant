@@ -331,14 +331,21 @@ def predict(
         print(f"  Querying image {idx+1}/{len(strain_images)}: {image_id}")
         
         # Determine environment filter for search
+        search_environment = None
+        exclude_environment = None
+        
         if environment is None:
-            # Use same environment as query image
+            # E1: Use same environment as query image
             search_environment = img_environment
         elif environment.lower() == "all":
-            # No environment filter
+            # E2: No environment filter
+            search_environment = None
+        elif environment.startswith("E4_"):
+            # E4: Exclude specific environment
+            exclude_environment = environment[3:]  # Extract environment name after "E4_"
             search_environment = None
         else:
-            # Use specified environment
+            # E3: Use specified environment
             search_environment = environment
         
         try:
@@ -350,7 +357,8 @@ def predict(
                 feature_type=feature_extractor.name.lower(),
                 num_neighbors=k * 2 if without_siblings else k,  # Get more if filtering
                 environment=search_environment,
-                exclude_self=True
+                exclude_self=True,
+                exclude_environment=exclude_environment
             )
             
             # Filter siblings if requested

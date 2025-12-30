@@ -715,6 +715,87 @@ def visualize_ground_truth_rankings(analysis: Dict[str, Any], output_dir: str):
     plt.close()
 
 
+def draw_confusion_matrix(
+    predictions: List[Dict[str, Any]],
+    output_path: str,
+    strategy_name: str = "Ensemble",
+    figsize: Tuple[int, int] = (12, 10)
+) -> None:
+    """
+    Draw confusion matrix from ensemble prediction results.
+    
+    Args:
+        predictions: List of prediction dictionaries with 'ground_truth' and 'predicted_specy'
+        output_path: Path to save the confusion matrix plot
+        strategy_name: Name of the strategy for the title
+        figsize: Figure size (width, height)
+    """
+    try:
+        from sklearn.metrics import confusion_matrix, classification_report
+    except ImportError:
+        print("Error: scikit-learn is required for confusion matrix.")
+        print("Install with: uv pip install scikit-learn")
+        return
+    
+    # Extract ground truth and predictions
+    y_true = []
+    y_pred = []
+    
+    for pred in predictions:
+        if pred.get('ground_truth') and pred.get('predicted_specy'):
+            y_true.append(pred['ground_truth'])
+            y_pred.append(pred['predicted_specy'])
+    
+    if not y_true:
+        print(f"No valid predictions to create confusion matrix for {strategy_name}")
+        return
+    
+    # Get unique labels sorted alphabetically
+    labels = sorted(list(set(y_true + y_pred)))
+    
+    # Create confusion matrix
+    cm = confusion_matrix(y_true, y_pred, labels=labels)
+    
+    # Calculate accuracy
+    accuracy = sum(1 for t, p in zip(y_true, y_pred) if t == p) / len(y_true)
+    
+    # Shorten species names for display
+    short_labels = [label.replace('Penicillium ', 'P. ') for label in labels]
+    
+    # Create figure
+    fig, ax = plt.subplots(figsize=figsize)
+    sns.heatmap(
+        cm,
+        annot=True,
+        fmt='d',
+        cmap='Blues',
+        xticklabels=short_labels,
+        yticklabels=short_labels,
+        square=True,
+        cbar_kws={'label': 'Count'},
+        ax=ax
+    )
+    
+    ax.set_title(f'Confusion Matrix - {strategy_name}\n(Accuracy: {accuracy:.2%})', 
+                 fontsize=14, fontweight='bold')
+    ax.set_ylabel('True Species', fontsize=12)
+    ax.set_xlabel('Predicted Species', fontsize=12)
+    plt.setp(ax.get_xticklabels(), rotation=45, ha='right')
+    plt.setp(ax.get_yticklabels(), rotation=0)
+    plt.tight_layout()
+    
+    # Save figure
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f"Saved confusion matrix to: {output_path}")
+    
+    # Print classification report
+    print(f"\n{strategy_name} - Classification Report:")
+    print(classification_report(y_true, y_pred, labels=labels, zero_division=0))
+    
+    plt.close()
+
+
 # ========== Ensemble Combination Functions ==========
 
 def combine_aggregated_results(
@@ -1400,6 +1481,51 @@ def main():
         OUTPUT_DIR,
         ensemble_result_manual
     )
+    
+    # Generate confusion matrices for each strategy
+    print("\n" + "-"*80)
+    print("Generating confusion matrices...")
+    
+    # Weighted strategy
+    draw_confusion_matrix(
+        ensemble_result_weighted['ensemble_predictions'],
+        os.path.join(OUTPUT_DIR, 'confusion_matrix_weighted.png'),
+        strategy_name="Weighted Sum Ensemble"
+    )
+    
+    # Simple average strategy
+    draw_confusion_matrix(
+        ensemble_result_simple['ensemble_predictions'],
+        os.path.join(OUTPUT_DIR, 'confusion_matrix_simple_avg.png'),
+        strategy_name="Simple Average Ensemble"
+    )
+    
+    # Manual weighted strategy (if available)
+    if ensemble_result_manual:
+        draw_confusion_matrix(
+            ensemble_result_manual['ensemble_predictions'],
+            os.path.join(OUTPUT_DIR, 'confusion_matrix_manual_weighted.png'),
+            strategy_name="Manual Weighted Ensemble"
+        )
+    
+    # Also generate confusion matrices for individual models
+    print("\n" + "-"*80)
+    print("Generating confusion matrices for individual models...")
+    
+    for fe in FEATURE_EXTRACTORS:
+        # Extract individual predictions from ensemble results
+        individual_predictions = []
+        for pred in ensemble_result_weighted['ensemble_predictions']:
+            individual_predictions.append({
+                'ground_truth': pred['ground_truth'],
+                'predicted_specy': pred['individual_predictions'][fe]['predicted']
+            })
+        
+        draw_confusion_matrix(
+            individual_predictions,
+            os.path.join(OUTPUT_DIR, f'confusion_matrix_{fe.lower()}.png'),
+            strategy_name=f"{fe} (Individual)"
+        )
     
     # Note about complementary case visualizations
     print("\n" + "-"*80)
