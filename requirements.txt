@@ -8,7 +8,10 @@ opencv-python
 scikit-learn
 scikit-image
 scipy
-tensorflow
 pillow
 matplotlib
 seaborn
+torch
+torchvision
+torchaudio
+tqdm

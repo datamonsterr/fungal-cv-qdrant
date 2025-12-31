@@ -1,0 +1,41 @@
+[project]
+name = "fungal-cv-qdrant"
+version = "0.1.0"
+description = "Fungal species classification using Computer Vision and Qdrant"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "typing_extensions>=4.12.0",
+    "pydantic>=2.0.0",
+    "pydantic-core>=2.0.0",
+    "qdrant-client",
+    "numpy",
+    "pandas",
+    "opencv-python-headless",
+    "scikit-learn",
+    "scikit-image",
+    "scipy",
+    "pillow",
+    "matplotlib",
+    "seaborn",
+    "torch",
+    "torchvision",
+    "torchaudio",
+    "tqdm",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "black",
+    "isort",
+    "flake8",
+    "mypy",
+]

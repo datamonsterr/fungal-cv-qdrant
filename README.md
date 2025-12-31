@@ -1,36 +1,24 @@
 # Myco Fungi Feature Extraction and Classification
 
-This project experiments with different feature extractor methods for classifying myco fungi species from images.
+This project experiments with different feature extractor methods for classifying myco fungi species from images using Computer Vision, Deep Learning (PyTorch), and Qdrant Vector Database.
 
 ## Prerequisites
 
-- Python 3.8+
+- Python 3.13+
+- [uv](https://github.com/astral-sh/uv) (for dependency management)
 - Docker (for Qdrant vector database)
 - Nix (optional, for reproducible environment)
 
 ## 1. Environment Setup
 
-### Using Virtual Environment
+This project uses `uv` for fast package management.
 
 ```bash
-# Create virtual environment
-python -m venv .venv
+# Install dependencies
+uv sync
 
 # Activate virtual environment
-source .venv/bin/activate  # Linux/Mac
-# or
-.venv\Scripts\activate     # Windows
-
-# Install dependencies
-pip install -r requirements.txt
-```
-
-### Using Nix (Optional)
-
-```bash
-nix-shell
 source .venv/bin/activate
-uv pip install -r requirements.txt
 ```
 
 ## 2. Setup Qdrant Vector Database
@@ -44,173 +32,108 @@ docker run -p 6333:6333 -p 6334:6334 \
     qdrant/qdrant
 ```
 
-Qdrant will be available at `http://localhost:6333`
+Qdrant will be available at `http://localhost:6333`.
 
-## 3. Dataset Processing
+## 3. Usage Pipeline
 
-### Prepare Dataset Structure
+All pipeline steps are orchestrated via `src/main.py`.
 
-Update the `ORIGINAL_DATASET_PATH` in `reformat_dataset.py`:
+### Step 1: Reformat Dataset
 
-```python
-ORIGINAL_DATASET_PATH = "../Dataset/original"  # Change this to your dataset path
-```
-
-### Run Dataset Reformatting
-
-This script:
-- Preprocesses raw images
-- Segments fungi colonies using K-means clustering
-- Generates metadata for full and segmented images
+Preprocesses raw images, segments fungi colonies using K-means clustering, and generates metadata.
 
 ```bash
-python reformat_dataset.py
+python src/main.py reformat
 ```
 
 **Output:**
-- `../Dataset/full_image/` - Preprocessed full images
-- `../Dataset/segmented_image/` - Segmented colony images
-- `../Dataset/full_image_metadata.json` - Metadata for full images
-- `../Dataset/segmented_image_metadata.json` - Metadata for segments
+- `Dataset/full_image/`
+- `Dataset/segmented_image/`
+- `Dataset/segmented_image_metadata.json`
 
-## 4. Feature Extraction
+### Step 1.1: Reformat Hierarchical (Optional)
 
-Extract features using multiple methods (HOG, Gabor, Color Histogram, ResNet50):
+Reformats the dataset into a hierarchical structure `{species}/{strain}/{environment}/` for easier manual inspection or standard image classification loaders.
 
 ```bash
-python feature_extractors.py
+python src/main.py reformat-hierarchical
 ```
 
 **Output:**
-- `../Dataset/segmented_features.json` - Extracted features for all segments
+- `Dataset/hierarchical/`
 
-**Feature extractors:**
-- **HOG**: Histogram of Oriented Gradients
-- **Gabor**: Gabor filter responses
-- **ColorHistogram**: RGB color distribution
-- **ResNet50**: Deep learning features (pre-trained on ImageNet)
+### Step 2: Generate Strain Mapping
 
-## 5. Upload Features to Qdrant
-
-Upload extracted features to the vector database:
+Generates a clean `strain_to_specy.csv` based on available data and creates a train/test split (one strain per species reserved for testing).
 
 ```bash
-python upload_qdrant.py
+python src/main.py generate-mapping
 ```
 
-This creates a collection named `myco_fungi_features` with multiple named vectors for each feature type.
+**Output:**
+- `Dataset/strain_to_specy.csv`
 
-## 6. Query Similar Images
+### Step 3: Feature Extraction & Upload
 
-### Using the Query Script
-
-Run the example query script:
+Extracts features (ResNet50, MobileNetV2, EfficientNetV2, HOG, Gabor, Color Histograms) and uploads them to Qdrant.
 
 ```bash
-python query.py
+python src/main.py extract
 ```
 
-This generates visualizations showing query images and their nearest neighbors for each feature type.
+**Output:**
+- `Dataset/segmented_features.json`
+- Qdrant Collection: `myco_fungi_features_full`
 
-**Output:** `./results/{image_id}_{feature_type}.jpg`
+### Step 4: Train Models
 
-### Using Query Utils Programmatically
+Fine-tunes PyTorch models (ResNet50, MobileNetV2, EfficientNetV2) on the training set.
 
-```python
-from qdrant_client import QdrantClient
-from query_utils import (
-    find_nearest_neighbors_by_id,
-    find_nearest_neighbors_by_image,
-    get_image_metadata,
-    visualize_neighbors
-)
-from feature_extractors import ResNet50Extractor
+```bash
+python src/main.py train
+```
 
-# Initialize client
-client = QdrantClient(host="localhost", port=6333)
-collection_name = "myco_fungi_features"
+**Output:**
+- `weights/*.pth` (Trained models)
+- `weights/*_history.json` (Training logs)
 
-# Query by image ID (already in database)
-neighbors = find_nearest_neighbors_by_id(
-    client=client,
-    collection_name=collection_name,
-    query_image_id="your_image_id",
-    feature_type="resnet50",  # hog, gabor, colorhistogram, resnet50
-    num_neighbors=10,
-    environment="CYA",  # Optional: filter by environment
-    exclude_self=True
-)
+### Step 5: Evaluation
 
-# Query by new image file (not in database)
-extractor = ResNet50Extractor()
-neighbors = find_nearest_neighbors_by_image(
-    client=client,
-    collection_name=collection_name,
-    image_path="path/to/query/image.jpg",
-    extractor=extractor,
-    feature_type="resnet50",
-    num_neighbors=10
-)
+Evaluates the models on the test set (unseen strains).
 
-# Get metadata for an image
-metadata = get_image_metadata(
-    client=client,
-    collection_name=collection_name,
-    image_id="your_image_id"
-)
+```bash
+python src/main.py evaluate --extractor resnet50 --k 5
+```
 
-# Visualize results
-visualize_neighbors(
-    query_image_path="path/to/query/image.jpg",
-    neighbors=neighbors,
-    segmented_image_dir="../Dataset/segmented_image",
-    output_path="output.jpg",
-    query_metadata=metadata,
-    max_neighbors=5
-)
+### Step 6: Prediction
+
+Predict species for a specific strain using vector similarity search.
+
+```bash
+python src/main.py predict --strain "DTO 123-A1" --extractor resnet50
 ```
 
 ## Project Structure
 
 ```
 .
-├── config.py                          # Configuration settings
-├── feature_extractors.py              # Feature extraction implementations
-├── feature_utils.py                   # Feature utility functions
-├── kmeans.py                          # K-means segmentation
-├── preprocess.py                      # Image preprocessing
-├── query_utils.py                     # Query and visualization utilities
-├── query.py                           # Example query script
-├── reformat_dataset.py                # Dataset processing pipeline
-├── upload_qdrant.py                   # Upload features to Qdrant
-├── requirements.txt                   # Python dependencies
-└── examples/                          # Example query results
-```
-
-## Query Filters
-
-You can filter queries by metadata:
-
-- `environment`: Growth medium (e.g., "CYA", "MEA")
-- `angle`: Viewing angle ("ob" or "rev")
-- `strain`: Strain identifier (e.g., "DTO 123-A1")
-- `specy`: Species name
-
-```python
-neighbors = find_nearest_neighbors_by_id(
-    client=client,
-    collection_name=collection_name,
-    query_image_id="your_image_id",
-    feature_type="resnet50",
-    environment="CYA",
-    angle="ob",
-    num_neighbors=10
-)
+├── pyproject.toml                     # Project dependencies
+├── src/
+│   ├── main.py                        # CLI Entry point
+│   ├── config.py                      # Centralized configuration
+│   ├── classification/                # Prediction & Evaluation logic
+│   ├── database/                      # Qdrant interaction
+│   ├── feature_extraction/            # Feature extractors (PyTorch & Traditional)
+│   ├── preprocessing/                 # Image processing & Segmentation
+│   ├── training/                      # PyTorch training loop
+│   ├── utils/                         # Helper utilities
+│   └── scripts/                       # Standalone scripts
+├── Dataset/                           # Data directory (ignored by git)
+└── README.md                          # Documentation
 ```
 
 ## Notes
 
-- **Pydantic** is used for data validation and settings management
-- Always use `uv` for package management when in Nix shell
-- Add new dependencies to `requirements.txt`
-- Ensure Qdrant is running before uploading or querying
+- **Configuration**: Paths and constants are defined in `src/config.py`.
+- **Dependencies**: Managed via `pyproject.toml`. Use `uv add <package>` to add new ones.
+- Ensure Qdrant is running before uploading or querying.
