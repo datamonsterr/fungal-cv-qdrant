@@ -119,6 +119,29 @@ def run_evaluate(args):
     )
     print("Evaluation complete.")
 
+def run_report(args):
+    print("Running comprehensive report...")
+    from src.experiments.comprehensive_report import run_comprehensive_report
+    
+    # Parse lists
+    extractors = args.extractors.split(',') if args.extractors else ["resnet50", "mobilenetv2", "efficientnetv2", "hog", "gabor", "colorhistogram"]
+    env_strategies = args.strategies.split(',') if args.strategies else ["all", "ob", "rev"] # Default assumptions
+    agg_strategies = args.agg_strategies.split(',') if args.agg_strategies else ["avg", "uni"]
+    
+    # Clean up whitespace
+    extractors = [e.strip().lower() for e in extractors]
+    env_strategies = [e.strip().lower() for e in env_strategies]
+    agg_strategies = [e.strip().lower() for e in agg_strategies]
+    
+    run_comprehensive_report(
+        identifier=args.identifier,
+        extractors=extractors,
+        env_strategies=env_strategies,
+        agg_strategies=agg_strategies,
+        k=args.k
+    )
+    print("Comprehensive report complete.")
+
 def main():
     parser = argparse.ArgumentParser(description="Fungal Species Classification Pipeline")
     subparsers = parser.add_subparsers(dest="command", help="Available commands")
@@ -156,6 +179,15 @@ def main():
     parser_evaluate.add_argument("--extractor", type=str, default="resnet50", help="Feature extractor to use")
     parser_evaluate.add_argument("--k", type=int, default=5, help="Number of neighbors")
     parser_evaluate.set_defaults(func=run_evaluate)
+
+    # Report
+    parser_report = subparsers.add_parser("report", help="Generate comprehensive report")
+    parser_report.add_argument("--identifier", type=str, required=True, help="Report identifier (folder name)")
+    parser_report.add_argument("--extractors", type=str, help="Comma-separated list of extractors")
+    parser_report.add_argument("--strategies", type=str, help="Comma-separated list of environment strategies")
+    parser_report.add_argument("--agg-strategies", type=str, help="Comma-separated list of aggregation strategies")
+    parser_report.add_argument("--k", type=int, default=5, help="Number of neighbors")
+    parser_report.set_defaults(func=run_report)
 
     args = parser.parse_args()
 

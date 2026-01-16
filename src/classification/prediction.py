@@ -150,10 +150,16 @@ def aggregate_predictions(
                 species_counts[specy] += 1
     
     aggregated = []
+    total_neighbors = sum(species_counts.values())
+
     for specy, total_score in species_scores.items():
-        count = species_counts[specy]
         if strategy == "avg":
-            final_score = total_score / count
+            # Weighted sum (sum of scores) divided by total neighbors count
+            final_score = total_score / total_neighbors if total_neighbors > 0 else 0
+        elif strategy == "uni":
+            # Uniform weight (count) divided by total neighbors count
+            count = species_counts[specy]
+            final_score = count / total_neighbors if total_neighbors > 0 else 0
         else:
             final_score = total_score
         aggregated.append((specy, final_score))
@@ -204,7 +210,7 @@ def predict(
             collection_name=collection_name,
             query_image_id=image_id,
             feature_type=feature_extractor.name.lower(),
-            num_neighbors=k + 5, # Fetch more to filter
+            num_neighbors=k * 10, # Fetch significantly more to ensure enough non-siblings remain
             environment=environment if environment and environment.lower() != "all" else None,
             exclude_self=True
         )

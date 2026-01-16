@@ -8,6 +8,7 @@ import cv2
 from src.preprocessing.kmeans import segment_kmeans
 from src.preprocessing.preprocess import process_image
 from src.config import (
+    PROJECT_ROOT,
     ORIGINAL_DATASET_PATH,
     FULL_IMAGE_PATH,
     FULL_IMAGE_METADATA_PATH,
@@ -139,6 +140,27 @@ def reformat_dataset():
                         seg_metadata = metadata.get_metadata()
                         seg_metadata['id'] = segment_id
                         seg_metadata['parent_id'] = id
+                        
+                        # Add paths
+                        seg_metadata['file_path'] = str(
+                            segment_path.relative_to(PROJECT_ROOT)
+                        )
+                        
+                        # Construct hierarchical path
+                        clean_strain = metadata.strain.replace(
+                            " ", "_"
+                        ).replace("/", "-")
+                        hierarchical_filename = (
+                            f"{clean_strain}_{metadata.environment}_"
+                            f"{metadata.angle}_seg{i}{FILE_EXTENSION}"
+                        )
+                        hierarchical_path = (
+                            f"Dataset/hierarchical/{metadata.specy}/"
+                            f"{metadata.strain}/{metadata.environment}/"
+                            f"{hierarchical_filename}"
+                        )
+                        seg_metadata['hierarchical_path'] = hierarchical_path
+
                         segment_metadata_list.append(seg_metadata)
                         
                 except Exception as e:

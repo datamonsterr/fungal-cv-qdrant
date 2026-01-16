@@ -25,7 +25,8 @@ def build_filter(
     strain: Optional[str] = None,
     specy: Optional[str] = None,
     parent_id: Optional[str] = None,
-    exclude_environment: Optional[str] = None
+    exclude_environment: Optional[str] = None,
+    exclude_strain: Optional[str] = None
 ) -> Optional[Filter]:
     """
     Build a Qdrant filter based on metadata conditions.
@@ -41,6 +42,11 @@ def build_filter(
     if exclude_environment is not None:
         exclude_conditions.append(
             FieldCondition(key="environment", match=MatchValue(value=exclude_environment))
+        )
+        
+    if exclude_strain is not None:
+        exclude_conditions.append(
+            FieldCondition(key="strain", match=MatchValue(value=exclude_strain))
         )
     
     if angle is not None:
@@ -82,7 +88,8 @@ def find_nearest_neighbors_by_id(
     strain: Optional[str] = None,
     specy: Optional[str] = None,
     exclude_self: bool = True,
-    exclude_environment: Optional[str] = None
+    exclude_environment: Optional[str] = None,
+    exclude_strain: Optional[str] = None
 ) -> List[Dict[str, Any]]:
     """
     Find nearest neighbors using an image ID already in the collection.
@@ -113,18 +120,21 @@ def find_nearest_neighbors_by_id(
         angle=angle,
         strain=strain,
         specy=specy,
-        exclude_environment=exclude_environment
+        exclude_environment=exclude_environment,
+        exclude_strain=exclude_strain
     )
     
     search_limit = num_neighbors + 1 if exclude_self else num_neighbors
     
-    results = client.search(
+    response = client.query_points(
         collection_name=collection_name,
-        query_vector=(feature_type, query_vector),
+        query=query_vector,
+        using=feature_type,
         query_filter=search_filter,
         limit=search_limit,
         with_payload=True
     )
+    results = response.points
     
     neighbors = []
     for result in results:

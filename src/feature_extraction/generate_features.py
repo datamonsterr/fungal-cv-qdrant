@@ -1,10 +1,8 @@
 import json
-import os
 import cv2
 import torch
 import numpy as np
 from tqdm import tqdm
-from typing import List, Dict, Any
 from pathlib import Path
 
 from src.config import (
@@ -19,8 +17,10 @@ from src.feature_extraction.feature_extractors import (
     HOGExtractor,
     GaborExtractor,
     ColorHistogramExtractor,
-    ColorHistogramHSExtractor
+    ColorHistogramHSExtractor,
+    ColorHistogramHSconcatResnet50
 )
+
 
 def generate_features(
     image_dir: Path = SEGMENTED_IMAGE_DIR,
@@ -39,6 +39,7 @@ def generate_features(
     
     # Initialize extractors
     extractors = [
+        ColorHistogramHSconcatResnet50(),  # Added back the combined extractor
         ResNet50Extractor(),
         MobileNetV2Extractor(),
         EfficientNetV2B0Extractor(),
@@ -58,8 +59,8 @@ def generate_features(
             continue
             
         # Read image
-        # Note: Deep learning extractors usually handle reading/transforming internally 
-        # or expect a path/PIL image. 
+        # Note: Deep learning extractors usually handle
+        # reading/transforming internally or expect a path/PIL image.
         # My BaseDeepLearningExtractor.extract takes an image path.
         # The traditional ones take a numpy array (cv2 image).
         
@@ -75,25 +76,7 @@ def generate_features(
         for extractor in extractors:
             try:
                 if hasattr(extractor, 'extract'):
-                    # Check signature or type of extractor
-                    # My refactored extractors:
-                    # DL ones take image_path (str)
-                    # Traditional ones take image (numpy array)
-                    
-                    # This is a bit messy, let's check the base class or implementation
-                    # In my refactor:
-                    # BaseDeepLearningExtractor.extract(self, image_path: str)
-                    # BaseFeatureExtractor.extract(self, image: np.ndarray)
-                    
-                    # I need to distinguish them.
-                    # I can check if it inherits from BaseDeepLearningExtractor
-                    
-                    from src.feature_extraction.feature_extractors import BaseDeepLearningExtractor
-                    
-                    if isinstance(extractor, BaseDeepLearningExtractor):
-                        vector = extractor.extract(str(image_path))
-                    else:
-                        vector = extractor.extract(img_cv2)
+                    vector = extractor.extract(img_cv2)
                         
                     # Convert to list for JSON serialization
                     if isinstance(vector, np.ndarray):
@@ -113,8 +96,9 @@ def generate_features(
     # Save to JSON
     with open(output_path, 'w') as f:
         json.dump(features_data, f)
-        
+
     print(f"Features saved to {output_path}")
+
 
 if __name__ == "__main__":
     generate_features()

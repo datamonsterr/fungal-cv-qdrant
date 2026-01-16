@@ -60,13 +60,129 @@ def collect_testset(
     strain: str,
     environment_strategy: str
 ) -> List[List[Dict[str, Any]]]:
-    # Implementation of test set collection based on strategy
-    # This was in evaluate_species.py
-    # I'll implement a simplified version or copy logic if needed.
-    # For now, just a placeholder or basic logic.
-    images = get_all_images_for_strain(client, collection_name, strain)
-    # Group by something?
-    return [images] # Treat all images as one group for now
+    """
+    Collect test sets for a strain based on environment strategy.
+    Creates up to 6 test sets, where each test set contains one image per environment.
+    """
+    # Determine strategy type and extract environment name
+    if environment_strategy.startswith("E3_"):
+        is_e3 = True
+        is_e4 = False
+        target_env = environment_strategy[3:]  # Extract environment name after "E3_"
+        exclude_env = None
+        # Get images from specific environment only
+        strain_images = get_all_images_for_strain(
+            client=client,
+            collection_name=collection_name,
+            strain=strain,
+            environment=target_env
+        )
+    elif environment_strategy.startswith("E4_"):
+        # E4: Get ALL images but will exclude specific environment from test sets
+        is_e3 = False
+        is_e4 = True
+        target_env = None
+        exclude_env = environment_strategy[3:]  # Extract environment name after "E4_"
+        strain_images = get_all_images_for_strain(
+            client=client,
+            collection_name=collection_name,
+            strain=strain,
+            environment=None
+        )
+    else:
+        # E1 or E2: Get ALL images from ALL environments
+        is_e3 = False
+        is_e4 = False
+        target_env = None
+        exclude_env = None
+        strain_images = get_all_images_for_strain(
+            client=client,
+            collection_name=collection_name,
+            strain=strain,
+            environment=None
+        )
+    
+    if not strain_images:
+        return []
+    
+    if is_e3:
+        # E3: Create test sets with one image each from the specific environment
+        # Group by segment_index to get different "views"
+        test_sets = []
+        for img in strain_images[:6]:  # Take up to 6 different images
+            test_sets.append([img])
+        return test_sets
+    else:
+        # E1/E2/E4: Create test sets with one image per environment
+        # Group images by environment, segment_index, and angle
+        env_segment_angle_images = defaultdict(lambda: defaultdict(lambda: defaultdict(list)))
+        
+        for img in strain_images:
+            env = img.get('environment', 'unknown')
+            # Skip excluded environment for E4 strategy
+            if is_e4 and env == exclude_env:
+                continue
+            segment_idx = img.get('segment_index', 0)
+            angle = img.get('angle', 'unknown')
+            env_segment_angle_images[env][segment_idx][angle].append(img)
+        
+        # Create test sets based on segment_index and angle combinations
+        # With 3 segments (0,1,2) and 2 angles (ob/obverse, rev/reverse), we get 6 unique test sets
+        test_sets = []
+        
+        # Define test set configurations: (segment_index, preferred_angle)
+        # This ensures each test set uses a unique combination of segment and angle
+        test_configs = [
+            (0, 'ob'), (0, 'rev'),
+            (1, 'ob'), (1, 'rev'),
+            (2, 'ob'), (2, 'rev'),
+        ]
+        
+        for segment_idx, preferred_angle in test_configs:
+            test_set = []
+            
+            # For each environment, pick the image with this segment_index and angle
+            for env in sorted(env_segment_angle_images.keys()):
+                segment_images = env_segment_angle_images[env]
+                
+                # Try to get image with current segment_index and preferred angle
+                img_selected = None
+                if segment_idx in segment_images:
+                    # Try preferred angle first (supporting both 'ob'/'rev' and 'obverse'/'reverse')
+                    angle_variations = {
+                        'ob': ['ob', 'obverse'],
+                        'rev': ['rev', 'reverse']
+                    }
+                    for angle_var in angle_variations.get(preferred_angle, [preferred_angle]):
+                        if angle_var in segment_images[segment_idx] and segment_images[segment_idx][angle_var]:
+                            img_selected = segment_images[segment_idx][angle_var][0]
+                            break
+                    
+                    # If preferred angle not found, use any angle from this segment
+                    if img_selected is None:
+                        for angle in segment_images[segment_idx]:
+                            if segment_images[segment_idx][angle]:
+                                img_selected = segment_images[segment_idx][angle][0]
+                                break
+                
+                # Fallback: use any available image from this environment
+                if img_selected is None:
+                    for seg_idx in sorted(segment_images.keys()):
+                        for angle in segment_images[seg_idx]:
+                            if segment_images[seg_idx][angle]:
+                                img_selected = segment_images[seg_idx][angle][0]
+                                break
+                        if img_selected is not None:
+                            break
+                
+                if img_selected is not None:
+                    test_set.append(img_selected)
+            
+            # Only add test set if it has images from all environments
+            if test_set and len(test_set) == len(env_segment_angle_images):
+                test_sets.append(test_set)
+        
+        return test_sets
 
 def predict_segment_group(
     client: QdrantClient,
@@ -82,7 +198,6 @@ def predict_segment_group(
     strain_to_specy_path: str = str(STRAIN_SPECIES_MAPPING_PATH),
 ) -> Dict[str, Any]:
     # This is similar to predict but takes a pre-fetched group of images
-    # I'll implement it here.
     from src.classification.prediction import find_nearest_neighbors_by_id, filter_siblings, aggregate_predictions
     import pandas as pd
     
@@ -94,15 +209,39 @@ def predict_segment_group(
     for query_img in test_group:
         image_id = query_img['image_id']
         parent_id = query_img['parent_id']
+        img_environment = query_img.get('environment', 'unknown')
+        
+        # Determine environment filter logic
+        search_environment = None
+        exclude_environment = None
+        
+        if environment is None:
+            # E1: Use same environment as query image
+            search_environment = img_environment
+        elif environment.lower() == "all":
+            # E2: No environment filter
+            search_environment = None
+        elif environment.startswith("E4_"):
+            # E4: Exclude specific environment
+            exclude_environment = environment[3:]
+            search_environment = None
+        elif environment.startswith("E3_"):
+            # E3: Use specific environment
+            search_environment = environment[3:]
+        else:
+            # E3 (legacy) or other: Use specified environment
+            search_environment = environment
         
         neighbors = find_nearest_neighbors_by_id(
             client=client,
             collection_name=collection_name,
             query_image_id=image_id,
             feature_type=feature_extractor.name.lower(),
-            num_neighbors=k + 5,
-            environment=environment,
-            exclude_self=True
+            num_neighbors=k * 10, # Fetch significantly more to ensure enough non-siblings remain
+            environment=search_environment,
+            exclude_self=True,
+            exclude_environment=exclude_environment,
+            exclude_strain=strain # Exclude the query strain from results
         )
         
         if without_siblings:
@@ -112,7 +251,7 @@ def predict_segment_group(
         
         raw_results.append({
             'query_image_id': image_id,
-            'query_environment': query_img.get('environment'),
+            'query_environment': img_environment,
             'neighbors': neighbors
         })
         
@@ -150,49 +289,70 @@ def run_species_evaluation(
     environment: str = None,
     strategy: str = "avg",
     output_dir: str = str(RESULTS_DIR)
-) -> Tuple[List[Dict[str, Any]], List[str]]:
+) -> Tuple[List[Dict[str, Any]], str]:
     
     import pandas as pd
     if not STRAIN_SPECIES_MAPPING_PATH.exists():
         print(f"Error: {STRAIN_SPECIES_MAPPING_PATH} not found. Please run 'python src/main.py generate-mapping' first.")
-        return [], []
+        return [], ""
 
     df_mapping = pd.read_csv(STRAIN_SPECIES_MAPPING_PATH)
     if 'Test' not in df_mapping.columns:
         print("Error: 'Test' column not found in mapping CSV. Please regenerate mapping.")
-        return [], []
+        return [], ""
         
     # Select strains where Test is True
-    # Create a dict {Species: Strain} for the report and iteration
-    # Note: The original code assumed one strain per species.
-    # If multiple strains are marked as Test for a species, we might want to evaluate all of them.
-    # But the return type implies a list of results.
-    
     test_df = df_mapping[df_mapping['Test'] == True]
     selected_strains = {}
     for _, row in test_df.iterrows():
         selected_strains[row['Species']] = row['Strain']
         
-    print_selection_report(selected_strains, output_dir)
+    selection_report_path = print_selection_report(selected_strains, output_dir)
     
     results = []
+    # Iterate over the selected strains (one per species as per mapping logic)
     for species, strain in selected_strains.items():
         print(f"Evaluating {species} (Strain: {strain})...")
-        # Get images
-        images = get_all_images_for_strain(client, collection_name, strain, environment)
-        if not images:
+        
+        # Use collect_testset to get test sets based on strategy
+        # If environment is None, default to "E1" (all images)
+        env_strategy = environment if environment else "E1"
+        
+        test_sets = collect_testset(
+            client=client,
+            collection_name=collection_name,
+            strain=strain,
+            environment_strategy=env_strategy
+        )
+        
+        if not test_sets:
+            print(f"  No test sets found for {strain} with strategy {env_strategy}")
             continue
             
-        res = predict_segment_group(
-            client, collection_name, images, strain, feature_extractor,
-            k, min_samples, without_siblings, environment, strategy
-        )
-        results.append(res)
+        print(f"  Found {len(test_sets)} test sets for {strain}")
         
-    print_prediction_results(results, output_dir)
+        for i, test_group in enumerate(test_sets):
+            res = predict_segment_group(
+                client=client,
+                collection_name=collection_name,
+                test_group=test_group,
+                strain=strain,
+                feature_extractor=feature_extractor,
+                k=k,
+                min_samples=min_samples,
+                without_siblings=without_siblings,
+                environment=environment, # Pass the original environment argument
+                strategy=strategy
+            )
+            # Add metadata
+            res['test_set_index'] = i
+            res['environment_strategy'] = env_strategy
+            results.append(res)
+        
+    report_path = print_prediction_results(results, output_dir)
     draw_confusion_matrix(results, os.path.join(output_dir, "confusion_matrix.png"))
     
-    return results, list(selected_strains.values())
+    return results, report_path
 
 if __name__ == "__main__":
     pass

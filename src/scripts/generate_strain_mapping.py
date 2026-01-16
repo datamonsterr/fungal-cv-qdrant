@@ -13,6 +13,31 @@ from src.config import (
     PROJECT_ROOT
 )
 
+def get_strain_species_from_folders(dataset_path: Path) -> Dict[str, str]:
+    """
+    Scan dataset folders to extract Strain and Species information.
+    Folder format expected: "DTO 123-A1 Species Name"
+    """
+    if not dataset_path.exists():
+        return {}
+    
+    strain_to_specy = {}
+    
+    for dir_name in os.listdir(dataset_path):
+        dir_path = dataset_path / dir_name
+        if not dir_path.is_dir():
+            continue
+            
+        # Regex to extract Strain (DTO ...) and Species (Rest)
+        # Pattern: Start with DTO, space, number, dash, code, space, Species Name
+        match = re.match(r'(DTO\s[0-9]+-[A-Z0-9]+)\s(.+)', dir_name)
+        if match:
+            strain = match.group(1)
+            species = match.group(2)
+            strain_to_specy[strain] = species
+            
+    return strain_to_specy
+
 def get_available_strains_from_metadata(metadata_path: Path) -> Set[str]:
     if not metadata_path.exists():
         return set()
@@ -28,147 +53,65 @@ def get_available_strains_from_metadata(metadata_path: Path) -> Set[str]:
             strains.add(strain)
     return strains
 
-def get_available_strains_from_folders(dataset_path: Path) -> Set[str]:
-    if not dataset_path.exists():
-        return set()
-    
-    strains = set()
-    # Assuming folders might contain strain names or files contain them
-    # Based on reformat_dataset.py, it iterates folders and then files
-    # Filename regex: (DTO\s[0-9]+-[A-Z0-9]+)
-    
-    for dir_name in os.listdir(dataset_path):
-        dir_path = dataset_path / dir_name
-        if not dir_path.is_dir():
-            continue
-            
-        for filename in os.listdir(dir_path):
-            match = re.match(r'(DTO\s[0-9]+-[A-Z0-9]+)', filename)
-            if match:
-                strains.add(match.group(1))
-                
-    return strains
-
 def generate_strain_mapping(
     source_csv_path: Path = PROJECT_ROOT / "strain_to_specy.csv",
     output_csv_path: Path = STRAIN_SPECIES_MAPPING_PATH
 ):
     print(f"Generating strain mapping...")
-    print(f"Source CSV: {source_csv_path}")
-    print(f"Output CSV: {output_csv_path}")
-
-    # 1. Load Master Mapping
-    if not source_csv_path.exists():
-        print(f"Error: Source CSV {source_csv_path} not found.")
-        return
-
-    df_master = pd.read_csv(source_csv_path)
-    # Ensure columns exist
-    if 'Strain' not in df_master.columns or 'Species' not in df_master.columns:
-        print("Error: Source CSV must have 'Strain' and 'Species' columns.")
-        return
-
-    # 2. Identify Available Strains
-    available_strains = set()
     
-    # Try metadata first
-    if SEGMENTED_METADATA_PATH.exists():
-        print(f"Reading strains from metadata: {SEGMENTED_METADATA_PATH}")
-        available_strains = get_available_strains_from_metadata(SEGMENTED_METADATA_PATH)
+    # 1. Scan Original Dataset for Mapping
+    print(f"Scanning {ORIGINAL_DATASET_PATH} for strain-species mapping...")
+    folder_mapping = get_strain_species_from_folders(ORIGINAL_DATASET_PATH)
     
-    # If no metadata or empty, try original folders
-    if not available_strains and ORIGINAL_DATASET_PATH.exists():
-        print(f"Reading strains from original dataset: {ORIGINAL_DATASET_PATH}")
-        available_strains = get_available_strains_from_folders(ORIGINAL_DATASET_PATH)
-        
-    if not available_strains:
-        print("Warning: No available strains found in metadata or dataset folders.")
-        print("Using all strains from master CSV.")
-        available_strains = set(df_master['Strain'].unique())
+    if not folder_mapping:
+        print("Warning: No mapping found from dataset folders.")
+        # Fallback to existing CSV if available
+        if source_csv_path.exists():
+             print(f"Loading from existing CSV: {source_csv_path}")
+             df_master = pd.read_csv(source_csv_path)
+             folder_mapping = dict(zip(df_master['Strain'], df_master['Species']))
+        else:
+            print("Error: No source for mapping found.")
+            return
     else:
-        print(f"Found {len(available_strains)} unique strains in dataset.")
+        print(f"Found {len(folder_mapping)} strains from folder names.")
 
-    # 3. Filter Master DataFrame
-    df_filtered = df_master[df_master['Strain'].isin(available_strains)].copy()
+    # Convert to DataFrame
+    df_filtered = pd.DataFrame(list(folder_mapping.items()), columns=['Strain', 'Species'])
     
-    # --- Reporting Logic (Merged from list_strains.py) ---
-    csv_strains = set(df_master['Strain'].unique())
-    in_both = available_strains & csv_strains
-    only_in_dataset = available_strains - csv_strains
-    only_in_csv = csv_strains - available_strains
+    # 2. Identify Available Strains (Validation)
+    # We already know they are available if we scanned folders, but let's check metadata too if exists
+    available_strains = set(folder_mapping.keys())
     
-    print("="*80)
-    print("STRAIN AVAILABILITY REPORT")
-    print("="*80)
-    
-    print(f"\nTotal strains in dataset: {len(available_strains)}")
-    print(f"Total strains in Master CSV: {len(csv_strains)}")
-    print(f"Strains in both: {len(in_both)}")
-    print(f"Only in dataset (Missing from CSV): {len(only_in_dataset)}")
-    print(f"Only in CSV (Missing from Dataset): {len(only_in_csv)}")
-    
-    if only_in_csv:
-        print(f"\n{'='*80}")
-        print(f"⚠ STRAINS IN CSV BUT NOT IN DATASET ({len(only_in_csv)} strains)")
-        print(f"{'='*80}")
-        print("These strains cannot be used for training/prediction:")
-        # Get species for these if possible
-        strain_to_specy_master = dict(zip(df_master['Strain'], df_master['Species']))
-        for strain in sorted(only_in_csv):
-            species = strain_to_specy_master.get(strain, "Unknown")
-            print(f"  {strain:<20} {species}")
-    
-    if only_in_dataset:
-        print(f"\n{'='*80}")
-        print(f"ℹ STRAINS IN DATASET BUT NOT IN CSV ({len(only_in_dataset)} strains)")
-        print(f"{'='*80}")
-        print("These strains have no ground truth species in Master CSV:")
-        for strain in sorted(only_in_dataset):
-            print(f"  {strain}")
-            
-    if in_both:
-        print(f"\n{'='*80}")
-        print("SPECIES DISTRIBUTION (Available Strains)")
-        print(f"{'='*80}")
-        
-        species_count = defaultdict(int)
-        strain_to_specy_master = dict(zip(df_master['Strain'], df_master['Species']))
-        
-        for strain in in_both:
-            species = strain_to_specy_master.get(strain, "Unknown")
-            species_count[species] += 1
-        
-        print(f"\n{'Species':<40} {'Count'}")
-        print("-"*80)
-        for species in sorted(species_count.keys()):
-            count = species_count[species]
-            print(f"{species:<40} {count}")
-        
-        print(f"\nTotal species: {len(species_count)}")
-    # -----------------------------------------------------
+    if SEGMENTED_METADATA_PATH.exists():
+        print(f"Verifying with metadata: {SEGMENTED_METADATA_PATH}")
+        metadata_strains = get_available_strains_from_metadata(SEGMENTED_METADATA_PATH)
+        if metadata_strains:
+            # Intersection
+            available_strains = available_strains.intersection(metadata_strains)
+            df_filtered = df_filtered[df_filtered['Strain'].isin(available_strains)]
+            print(f"Strains confirmed in metadata: {len(df_filtered)}")
 
-    if df_filtered.empty:
-        print("Warning: No intersection between master CSV and available strains.")
-        return
-
-    # 4. Assign Test Set (One strain per species)
+    # 3. Assign Test Set (One strain per species)
     # Logic: Group by Species, pick the 2nd strain if available, else 1st.
     
     species_groups = df_filtered.groupby('Species')['Strain'].apply(list).to_dict()
     test_strains = set()
     
     for species, strains in species_groups.items():
-        # Sort to ensure deterministic selection
+        # Sort strains to ensure deterministic selection
         strains.sort()
         
         if len(strains) > 1:
-            test_strains.add(strains[1]) # Pick 2nd
+            # If multiple strains, pick the second one as test (arbitrary but consistent)
+            test_strains.add(strains[1]) 
         else:
-            test_strains.add(strains[0]) # Pick 1st if only 1
+            # If only one strain, we can't really test on unseen strain for this species.
+            pass
             
     df_filtered['Test'] = df_filtered['Strain'].apply(lambda x: x in test_strains)
     
-    # 5. Save
+    # 4. Save
     output_csv_path.parent.mkdir(parents=True, exist_ok=True)
     df_filtered.to_csv(output_csv_path, index=False)
     print(f"Saved generated mapping to {output_csv_path}")
