@@ -1,9 +1,10 @@
-from sklearn.cluster import KMeans
+from typing import Dict, List
+
+import cv2 as cv
 import numpy as np
 from numpy.typing import NDArray
-import cv2 as cv
-import os
-from typing import List, Dict, Any
+from sklearn.cluster import KMeans
+
 
 def get_bbox(labels: NDArray[np.int32], mat: NDArray[np.int32]) -> List[Dict[str, int]]:
     clusters = [[] for _ in range(3)]
@@ -19,15 +20,20 @@ def get_bbox(labels: NDArray[np.int32], mat: NDArray[np.int32]) -> List[Dict[str
         y_max = int(np.max(cluster[:, 0]))
         x_min = int(np.min(cluster[:, 1]))
         x_max = int(np.max(cluster[:, 1]))
-        bounding_boxes.append({
-            "xmin": x_min,
-            "ymin": y_min,
-            "xmax": x_max,
-            "ymax": y_max,
-        })
+        bounding_boxes.append(
+            {
+                "xmin": x_min,
+                "ymin": y_min,
+                "xmax": x_max,
+                "ymax": y_max,
+            }
+        )
     return bounding_boxes
 
-def draw_bbox(img: NDArray[np.uint8], bboxes: List[Dict[str, int]]) -> NDArray[np.uint8]:
+
+def draw_bbox(
+    img: NDArray[np.uint8], bboxes: List[Dict[str, int]]
+) -> NDArray[np.uint8]:
     colors = [(255, 0, 0), (0, 255, 0), (0, 0, 255)]
     img_with_boxes = cv.cvtColor(img.copy(), cv.COLOR_HSV2RGB)
     for i, bbox in enumerate(bboxes):
@@ -38,9 +44,10 @@ def draw_bbox(img: NDArray[np.uint8], bboxes: List[Dict[str, int]]) -> NDArray[n
             colors[i % len(colors)],
             2,
         )
-    return img_with_boxes
+    return np.asarray(img_with_boxes, dtype=np.uint8)
 
-def segment_kmeans(img_path: str) -> List[Dict[str, int]]:
+
+def segment_kmeans(img_path: str) -> List[Dict[str, int]]:  # noqa: C901
     img = cv.imread(img_path)
     if img is None:
         return []
@@ -74,21 +81,31 @@ def segment_kmeans(img_path: str) -> List[Dict[str, int]]:
 
     mask = sum(masks)
 
-    corners = np.array([
-        [0, 0], [0, w], [h, 0], [h, w], [h // 2, 0], [0, w // 2], [h // 2, w], [h, w // 2]
-    ])
-    directions = np.array([
-        [1, 1], [1, -1], [-1, 1], [-1, -1], [0, 1], [1, 0], [0, -1], [-1, 0]
-    ])
+    corners = np.array(
+        [
+            [0, 0],
+            [0, w],
+            [h, 0],
+            [h, w],
+            [h // 2, 0],
+            [0, w // 2],
+            [h // 2, w],
+            [h, w // 2],
+        ]
+    )
+    directions = np.array(
+        [[1, 1], [1, -1], [-1, 1], [-1, -1], [0, 1], [1, 0], [0, -1], [-1, 0]]
+    )
 
     votes = np.zeros(8)
     for _ in range(120):
         corners += directions
         for j, corner in enumerate(corners):
             x, y = corner
-            color = np.array(mask[int(x), int(y)]).argmax(axis=0)
-            if color != 0 and votes[j] == 0:
-                votes[j] = color
+            if 0 <= int(x) < h and 0 <= int(y) < w:
+                color = int(np.array(mask[int(x), int(y)]).argmax(axis=0))  # type: ignore[arg-type]
+                if color != 0 and votes[j] == 0:
+                    votes[j] = color
 
     avg_vote = int(np.round(np.average(votes)))
     if avg_vote == 0:
@@ -110,9 +127,9 @@ def segment_kmeans(img_path: str) -> List[Dict[str, int]]:
     P = np.argwhere(new_mask == 1)
     if len(P) == 0:
         return []
-        
+
     kmeans_P = KMeans(n_clusters=3, random_state=0).fit(P)
     labels_P = kmeans_P.labels_
 
-    bboxes = get_bbox(labels_P, P)
+    bboxes = get_bbox(labels_P, P.astype(np.int32))  # type: ignore[arg-type]
     return bboxes

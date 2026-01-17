@@ -1,8 +1,11 @@
+from typing import Optional
+
 import cv2
 import numpy as np
 from numpy.typing import NDArray
-from typing import Optional
+
 from src.config import HEIGHT, WIDTH
+
 
 def process_image(img: NDArray[np.uint8]) -> NDArray[np.uint8]:
     """Crop the Petri dish circle and resize to 256×256."""

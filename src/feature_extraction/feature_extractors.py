@@ -1,30 +1,33 @@
-import os
 import json
+import os
+from abc import ABC, abstractmethod
+from typing import Any, List, Optional, Tuple
+
 import cv2
 import numpy as np
-from abc import ABC, abstractmethod
-from typing import List, Tuple, Any, Optional
-from skimage.feature import hog
-from skimage.filters import gabor_kernel
-from scipy import ndimage as ndi
-
 import torch
 import torch.nn as nn
 import torchvision.transforms as transforms
+from scipy import ndimage as ndi
+from skimage.feature import hog
+from skimage.filters import gabor_kernel
 from torchvision.models import (
-    resnet50, ResNet50_Weights,
-    mobilenet_v2, MobileNet_V2_Weights,
-    efficientnet_b1, EfficientNet_B1_Weights
+    EfficientNet_B1_Weights,
+    MobileNet_V2_Weights,
+    ResNet50_Weights,
+    efficientnet_b1,
+    mobilenet_v2,
+    resnet50,
 )
 
 
 def l2_normalize(features: np.ndarray) -> np.ndarray:
     """
     Apply L2 normalization to feature vector.
-    
+
     Args:
         features: Feature vector as numpy array
-        
+
     Returns:
         L2 normalized feature vector
     """
@@ -36,28 +39,28 @@ def l2_normalize(features: np.ndarray) -> np.ndarray:
 
 class FeatureExtractor(ABC):
     """Abstract base class for feature extractors."""
-    
+
     def __init__(self, name: str):
         self.name = name
-    
+
     @abstractmethod
     def extract(self, image: np.ndarray) -> np.ndarray:
         """
         Extract features from an image.
-        
+
         Args:
             image: Input image as numpy array (BGR format from cv2)
-            
+
         Returns:
             Feature vector as 1D numpy array
         """
         pass
-    
+
     @abstractmethod
     def get_feature_names(self) -> List[str]:
         """
         Get the names of features extracted by this extractor.
-        
+
         Returns:
             List of feature names
         """
@@ -72,7 +75,7 @@ class HOGExtractor(FeatureExtractor):
         orientations: int = 9,
         pixels_per_cell: Tuple[int, int] = (8, 8),
         cells_per_block: Tuple[int, int] = (2, 2),
-        target_size: Tuple[int, int] = (128, 128)
+        target_size: Tuple[int, int] = (128, 128),
     ):
         super().__init__("HOG")
         self.orientations = orientations
@@ -80,15 +83,15 @@ class HOGExtractor(FeatureExtractor):
         self.cells_per_block = cells_per_block
         self.target_size = target_size
         self._feature_dim: Optional[int] = None
-    
+
     def extract(self, image: np.ndarray) -> np.ndarray:
         """Extract HOG features from image."""
         # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
+
         # Resize to target size
         gray = cv2.resize(gray, self.target_size)
-        
+
         # Extract HOG features
         features = hog(
             gray,
@@ -96,26 +99,25 @@ class HOGExtractor(FeatureExtractor):
             pixels_per_cell=self.pixels_per_cell,
             cells_per_block=self.cells_per_block,
             visualize=False,
-            feature_vector=True
+            feature_vector=True,
         )
-        
+
         if self._feature_dim is None:
             self._feature_dim = len(features)
-        
+
         # Apply L2 normalization
         features = l2_normalize(features)
         return features
-    
+
     def get_feature_names(self) -> List[str]:
         """Get feature names for HOG."""
         if self._feature_dim is None:
             # Calculate expected dimension
             dummy = np.zeros(
-                (self.target_size[0], self.target_size[1], 3),
-                dtype=np.uint8
+                (self.target_size[0], self.target_size[1], 3), dtype=np.uint8
             )
             self.extract(dummy)
-        
+
         feature_dim = self._feature_dim if self._feature_dim is not None else 0
         return [f"hog_{i}" for i in range(feature_dim)]
 
@@ -127,11 +129,11 @@ class GaborExtractor(FeatureExtractor):
         self,
         frequencies: Optional[List[float]] = None,
         thetas: Optional[List[float]] = None,
-        target_size: Tuple[int, int] = (128, 128)
+        target_size: Tuple[int, int] = (128, 128),
     ):
         super().__init__("Gabor")
         self.frequencies = frequencies or [0.1, 0.2, 0.3, 0.4]
-        self.thetas = thetas or [0, np.pi/4, np.pi/2, 3*np.pi/4]
+        self.thetas = thetas or [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]
         self.target_size = target_size
         self._kernels: List[Any] = self._prepare_kernels()
 
@@ -140,28 +142,28 @@ class GaborExtractor(FeatureExtractor):
         kernels: List[Any] = []
         for freq in self.frequencies:
             for theta in self.thetas:
-                kernel = np.real(gabor_kernel(freq, theta=theta))
+                kernel = np.real(gabor_kernel(freq, theta=int(theta)))  # type: ignore[arg-type]
                 kernels.append(kernel)
         return kernels
-    
+
     def extract(self, image: np.ndarray) -> np.ndarray:
         """Extract Gabor filter features from image."""
         # Convert to grayscale
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        
+
         # Resize to target size
         gray = cv2.resize(gray, self.target_size)
-        
+
         # Apply Gabor filters and compute statistics
         features: List[float] = []
         for kernel in self._kernels:
-            filtered = ndi.convolve(gray, kernel, mode='wrap')
+            filtered = ndi.convolve(gray, kernel, mode="wrap")
             # Extract mean and std as features
             features.extend([filtered.mean(), filtered.std()])
-        
+
         # Apply L2 normalization
         return l2_normalize(np.array(features))
-    
+
     def get_feature_names(self) -> List[str]:
         """Get feature names for Gabor filters."""
         names: List[str] = []
@@ -175,37 +177,33 @@ class GaborExtractor(FeatureExtractor):
 class ColorHistogramExtractor(FeatureExtractor):
     """Color histogram feature extractor."""
 
-    def __init__(
-        self,
-        bins: int = 32,
-        target_size: Tuple[int, int] = (128, 128)
-    ):
+    def __init__(self, bins: int = 32, target_size: Tuple[int, int] = (128, 128)):
         super().__init__("ColorHistogram")
         self.bins = bins
         self.target_size = target_size
-    
+
     def extract(self, image: np.ndarray) -> np.ndarray:
         """Extract color histogram features from image."""
         # Resize image
         resized = cv2.resize(image, self.target_size)
-        
+
         # Convert BGR to RGB
         rgb = cv2.cvtColor(resized, cv2.COLOR_BGR2RGB)
-        
+
         # Compute histogram for each channel
         features: List[float] = []
         for i in range(3):  # R, G, B channels
             hist = cv2.calcHist([rgb], [i], None, [self.bins], [0, 256])
             hist = hist.flatten()
             features.extend(hist)
-        
+
         # Apply L2 normalization
         return l2_normalize(np.array(features))
-    
+
     def get_feature_names(self) -> List[str]:
         """Get feature names for color histogram."""
         names: List[str] = []
-        for channel in ['r', 'g', 'b']:
+        for channel in ["r", "g", "b"]:
             for i in range(self.bins):
                 names.append(f"hist_{channel}_{i}")
         return names
@@ -214,11 +212,7 @@ class ColorHistogramExtractor(FeatureExtractor):
 class ColorHistogramHSExtractor(FeatureExtractor):
     """Color histogram extractor using HSV (H and S channels only)."""
 
-    def __init__(
-        self,
-        bins: int = 32,
-        target_size: Tuple[int, int] = (128, 128)
-    ):
+    def __init__(self, bins: int = 32, target_size: Tuple[int, int] = (128, 128)):
         super().__init__("ColorHistogramHS")
         self.bins = bins
         self.target_size = target_size
@@ -227,10 +221,10 @@ class ColorHistogramHSExtractor(FeatureExtractor):
         """Extract color histogram from H and S channels of HSV."""
         # Resize image
         resized = cv2.resize(image, self.target_size)
-        
+
         # Convert BGR to HSV
         hsv = cv2.cvtColor(resized, cv2.COLOR_BGR2HSV)
-        
+
         # Compute histogram for H and S channels only (skip V channel)
         features: List[float] = []
         for i in range(2):  # H and S channels (indices 0 and 1)
@@ -240,14 +234,14 @@ class ColorHistogramHSExtractor(FeatureExtractor):
                 hist = cv2.calcHist([hsv], [i], None, [self.bins], [0, 256])
             hist = hist.flatten()
             features.extend(hist)
-        
+
         # Apply L2 normalization
         return l2_normalize(np.array(features))
-    
+
     def get_feature_names(self) -> List[str]:
         """Get feature names for HSV histogram (H and S channels)."""
         names: List[str] = []
-        for channel in ['h', 's']:
+        for channel in ["h", "s"]:
             for i in range(self.bins):
                 names.append(f"hist_{channel}_{i}")
         return names
@@ -260,27 +254,26 @@ class BaseDeepLearningExtractor(FeatureExtractor):
         self,
         name: str,
         target_size: Tuple[int, int],
-        weights_path: Optional[str] = None
+        weights_path: Optional[str] = None,
     ):
         super().__init__(name)
         self.target_size = target_size
-        self.device = torch.device(
-            "cuda" if torch.cuda.is_available() else "cpu"
-        )
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self.model = self._build_model(weights_path)
         self.model.to(self.device)
         self.model.eval()
 
-        self.preprocess = transforms.Compose([
-            transforms.ToPILImage(),
-            transforms.Resize(self.target_size),
-            transforms.ToTensor(),
-            transforms.Normalize(
-                mean=[0.485, 0.456, 0.406],
-                std=[0.229, 0.224, 0.225]
-            ),
-        ])
-        
+        self.preprocess = transforms.Compose(
+            [
+                transforms.ToPILImage(),
+                transforms.Resize(self.target_size),
+                transforms.ToTensor(),
+                transforms.Normalize(
+                    mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]
+                ),
+            ]
+        )
+
         self._feature_dim = self._get_feature_dim()
 
     @abstractmethod
@@ -298,17 +291,17 @@ class BaseDeepLearningExtractor(FeatureExtractor):
         """Extract features using the deep learning model."""
         # Convert BGR to RGB
         rgb = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
-        
+
         # Preprocess
-        input_tensor = self.preprocess(rgb).unsqueeze(0).to(self.device)
-        
+        input_tensor = self.preprocess(rgb).unsqueeze(0).to(self.device)  # type: ignore[union-attr]
+
         # Extract features
         with torch.no_grad():
             features = self.model(input_tensor)
-        
+
         # Move to CPU and convert to numpy
         features_np = features.cpu().numpy().flatten()
-        
+
         # Apply L2 normalization
         return l2_normalize(features_np)
 
@@ -322,16 +315,13 @@ class ResNet50Extractor(BaseDeepLearningExtractor):
     def __init__(
         self,
         target_size: Tuple[int, int] = (224, 224),
-        weights_path: Optional[str] = None
+        weights_path: Optional[str] = None,
     ):
         super().__init__("ResNet50", target_size, weights_path)
-        
+
     def _build_model(self, weights_path: Optional[str]) -> nn.Module:
         if weights_path and os.path.exists(weights_path):
-            print(
-                f"Loading fine-tuned ResNet50 weights from: "
-                f"{weights_path}"
-            )
+            print(f"Loading fine-tuned ResNet50 weights from: " f"{weights_path}")
             # Load full model and remove head
             # Assuming weights_path points to a state_dict of a
             # model with a classifier
@@ -343,12 +333,9 @@ class ResNet50Extractor(BaseDeepLearningExtractor):
             # For feature extraction, we want the backbone.
             # If loading a full model checkpoint:
             try:
-                checkpoint = torch.load(
-                    weights_path,
-                    map_location=self.device
-                )
-                if 'state_dict' in checkpoint:
-                    state_dict = checkpoint['state_dict']
+                checkpoint = torch.load(weights_path, map_location=self.device)
+                if "state_dict" in checkpoint:
+                    state_dict = checkpoint["state_dict"]
                 else:
                     state_dict = checkpoint
 
@@ -369,9 +356,7 @@ class ResNet50Extractor(BaseDeepLearningExtractor):
                 model.load_state_dict(state_dict, strict=False)
                 print("✓ Fine-tuned weights loaded (partial/full)")
             except Exception as e:
-                print(
-                    f"Warning: Failed to load fine-tuned weights: {e}"
-                )
+                print(f"Warning: Failed to load fine-tuned weights: {e}")
                 print("Using ImageNet weights instead")
                 model = resnet50(weights=ResNet50_Weights.DEFAULT)
         else:
@@ -381,7 +366,7 @@ class ResNet50Extractor(BaseDeepLearningExtractor):
         # ResNet50 structure ends with avgpool -> flatten -> fc
         # We want the output of avgpool, flattened.
         # We can replace fc with Identity
-        model.fc = nn.Identity()
+        model.fc = nn.Identity()  # type: ignore[assignment]
         return model
 
 
@@ -391,29 +376,21 @@ class MobileNetV2Extractor(BaseDeepLearningExtractor):
     def __init__(
         self,
         target_size: Tuple[int, int] = (224, 224),
-        weights_path: Optional[str] = None
+        weights_path: Optional[str] = None,
     ):
         super().__init__("MobileNetV2", target_size, weights_path)
-        
+
     def _build_model(self, weights_path: Optional[str]) -> nn.Module:
         if weights_path and os.path.exists(weights_path):
-            print(
-                f"Loading fine-tuned MobileNetV2 weights from: "
-                f"{weights_path}"
-            )
+            print(f"Loading fine-tuned MobileNetV2 weights from: " f"{weights_path}")
             model = mobilenet_v2(weights=None)
             try:
-                checkpoint = torch.load(
-                    weights_path,
-                    map_location=self.device
-                )
-                state_dict = checkpoint.get('state_dict', checkpoint)
+                checkpoint = torch.load(weights_path, map_location=self.device)
+                state_dict = checkpoint.get("state_dict", checkpoint)
                 model.load_state_dict(state_dict, strict=False)
                 print("✓ Fine-tuned weights loaded")
             except Exception as e:
-                print(
-                    f"Warning: Failed to load fine-tuned weights: {e}"
-                )
+                print(f"Warning: Failed to load fine-tuned weights: {e}")
                 model = mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT)
         else:
             model = mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT)
@@ -446,10 +423,10 @@ class EfficientNetB1Extractor(BaseDeepLearningExtractor):
     def __init__(
         self,
         target_size: Tuple[int, int] = (224, 224),
-        weights_path: Optional[str] = None
+        weights_path: Optional[str] = None,
     ):
         super().__init__("EfficientNetB1", target_size, weights_path)
-        
+
     def _build_model(self, weights_path: Optional[str]) -> nn.Module:
         # Always use ImageNet weights
         model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
@@ -472,17 +449,14 @@ class ColorHistogramHSconcatResnet50(FeatureExtractor):
         hist_weight: float = 3.0,
         bins: int = 32,
         hist_target_size: Tuple[int, int] = (128, 128),
-        resnet_target_size: Tuple[int, int] = (224, 224)
+        resnet_target_size: Tuple[int, int] = (224, 224),
     ):
         super().__init__("ColorHistogramHSconcatResnet50")
         self.hist_weight = hist_weight
         self.hist_extractor = ColorHistogramHSExtractor(
-            bins=bins,
-            target_size=hist_target_size
+            bins=bins, target_size=hist_target_size
         )
-        self.resnet_extractor = ResNet50Extractor(
-            target_size=resnet_target_size
-        )
+        self.resnet_extractor = ResNet50Extractor(target_size=resnet_target_size)
         self._feature_dim = 64 + 2048
 
     def extract(self, image: np.ndarray) -> np.ndarray:
@@ -497,8 +471,7 @@ class ColorHistogramHSconcatResnet50(FeatureExtractor):
 
     def get_feature_names(self) -> List[str]:
         hist_names = [
-            f"weighted_hist_{name}"
-            for name in self.hist_extractor.get_feature_names()
+            f"weighted_hist_{name}" for name in self.hist_extractor.get_feature_names()
         ]
         resnet_names = self.resnet_extractor.get_feature_names()
         return hist_names + resnet_names
@@ -508,12 +481,12 @@ def extract_features_from_dataset(
     segmented_image_path: str,
     metadata_path: str,
     output_json_path: str,
-    extractors: List[FeatureExtractor]
+    extractors: List[FeatureExtractor],
 ) -> List[dict[str, Any]]:
     """
     Extract features from all segmented images and save to JSON.
     """
-    with open(metadata_path, 'r') as f:
+    with open(metadata_path, "r") as f:
         metadata_list = json.load(f)
 
     print(f"Found {len(metadata_list)} images in metadata")
@@ -521,64 +494,56 @@ def extract_features_from_dataset(
         f"Applying {len(extractors)} feature extractors: "
         f"{[e.name for e in extractors]}"
     )
-    
+
     results: List[dict[str, Any]] = []
-    
+
     for idx, metadata in enumerate(metadata_list):
-        image_id = metadata['id']
+        image_id = metadata["id"]
         image_path = os.path.join(segmented_image_path, f"{image_id}.jpg")
-        
+
         if not os.path.exists(image_path):
             print(f"Warning: Image {image_path} not found, skipping...")
             continue
-        
+
         image = cv2.imread(image_path)
         if image is None or image.size == 0:
             print(f"Warning: Failed to read {image_path}, skipping...")
             continue
 
-        feature_data: dict[str, Any] = {
-            'id': image_id,
-            'features': {}
-        }
+        feature_data: dict[str, Any] = {"id": image_id, "features": {}}
 
         try:
             for extractor in extractors:
                 features = extractor.extract(image)
-                feature_data['features'][extractor.name.lower()] = {
-                    'vector': features.tolist(),
-                    'dimension': len(features)
+                feature_data["features"][extractor.name.lower()] = {
+                    "vector": features.tolist(),
+                    "dimension": len(features),
                 }
 
             results.append(feature_data)
 
             if (idx + 1) % 10 == 0:
-                print(
-                    f"Processed {idx + 1}/{len(metadata_list)} "
-                    f"images..."
-                )
+                print(f"Processed {idx + 1}/{len(metadata_list)} " f"images...")
 
         except Exception as e:
             print(f"Error processing {image_id}: {e}")
             continue
 
-    with open(output_json_path, 'w') as f:
+    with open(output_json_path, "w") as f:
         json.dump(results, f, indent=2)
 
     total_features = 0
     if results:
         total_features = sum(
-            feat['dimension']
-            for feat in results[0]['features'].values()
+            feat["dimension"] for feat in results[0]["features"].values()
         )
 
     print("\nFeature extraction complete!")
     print(f"Processed {len(results)} images")
     print(
-        f"Feature types: "
-        f"{list(results[0]['features'].keys()) if results else []}"
+        f"Feature types: " f"{list(results[0]['features'].keys()) if results else []}"
     )
     print(f"Total feature dimension: {total_features}")
     print(f"Results saved to: {output_json_path}")
-    
+
     return results
