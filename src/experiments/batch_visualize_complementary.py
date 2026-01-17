@@ -5,10 +5,10 @@ Uses run_species_evaluation to get results with raw_results, then visualizes the
 import json
 import os
 from qdrant_client import QdrantClient
-from evaluate_species import predict_segment_group, collect_testset, get_all_images_for_strain
-from feature_extractors import ColorHistogramHSExtractor, ResNet50Extractor, EfficientNetV2B0Extractor
-from visualize_prediction import visualize_prediction_by_environment
-from config import SEGMENTED_IMAGE_DIR
+from src.classification.evaluate_species import predict_segment_group, collect_testset, get_all_images_for_strain
+from src.feature_extraction.feature_extractors import ColorHistogramHSExtractor, ResNet50Extractor, EfficientNetB1Extractor
+from src.classification.visualization.visualize_prediction import visualize_prediction_by_environment
+from src.config import SEGMENTED_IMAGE_DIR
 
 
 def load_complementary_cases():
@@ -168,7 +168,7 @@ def main():
                     client=CLIENT,
                     collection_name=COLLECTION_NAME,
                     strain=case['strain'],
-                    feature_extractor=EfficientNetV2B0Extractor(),
+                    feature_extractor=EfficientNetB1Extractor(),
                     extractor_name='EfficientNetV2B0',
                     test_set_index=case['test_set_index'],
                     output_dir=efficient_dir,

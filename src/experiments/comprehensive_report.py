@@ -8,7 +8,7 @@ from src.config import (
     QDRANT_URL, COLLECTION_NAME, RESULTS_DIR
 )
 from src.feature_extraction.feature_extractors import (
-    ResNet50Extractor, MobileNetV2Extractor, EfficientNetV2B0Extractor,
+    ResNet50Extractor, MobileNetV2Extractor, EfficientNetB1Extractor,
     HOGExtractor, GaborExtractor, ColorHistogramExtractor,
     FeatureExtractor
 )
@@ -22,7 +22,7 @@ def get_extractor_by_name(name: str) -> Optional[FeatureExtractor]:
     elif name == "mobilenetv2":
         return MobileNetV2Extractor()
     elif name == "efficientnetv2":
-        return EfficientNetV2B0Extractor()
+        return EfficientNetB1Extractor()
     elif name == "hog":
         return HOGExtractor()
     elif name == "gabor":

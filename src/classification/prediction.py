@@ -321,6 +321,10 @@ def draw_confusion_matrix(
     y_true = [p['ground_truth'] for p in predictions]
     y_pred = [p['predicted_specy'] for p in predictions]
     
+    # Calculate accuracy
+    correct_count = sum(1 for yt, yp in zip(y_true, y_pred) if yt == yp)
+    accuracy = (correct_count / len(predictions) * 100) if predictions else 0
+    
     labels = sorted(list(set(y_true) | set(y_pred)))
     cm = confusion_matrix(y_true, y_pred, labels=labels)
     
@@ -328,7 +332,7 @@ def draw_confusion_matrix(
     sns.heatmap(cm, annot=True, fmt='d', xticklabels=labels, yticklabels=labels, cmap='Blues')
     plt.xlabel('Predicted')
     plt.ylabel('True')
-    plt.title('Confusion Matrix')
+    plt.title(f'Confusion Matrix - Accuracy: {accuracy:.2f}% ({correct_count}/{len(predictions)})')
     plt.xticks(rotation=90)
     plt.tight_layout()
     plt.savefig(output_path)

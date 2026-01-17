@@ -23,7 +23,7 @@ from src.feature_extraction.feature_extractors import (
     ColorHistogramHSExtractor,
     FeatureExtractor,
     MobileNetV2Extractor,
-    EfficientNetV2B0Extractor
+    EfficientNetB1Extractor
 )
 from src.config import (
     QDRANT_URL, COLLECTION_NAME, RESULTS_DIR, STRAIN_SPECIES_MAPPING_PATH
@@ -51,6 +51,18 @@ def print_prediction_results(results: List[Dict[str, Any]], output_dir: str) -> 
         f.write(f"Accuracy: {accuracy:.4f}\n")
         for r in results:
             f.write(f"{r['strain']} ({r['ground_truth']}) -> {r['predicted_specy']} [{'Correct' if r['correct'] else 'Wrong'}]\n")
+    
+    # Also save JSON summary
+    json_path = os.path.join(output_dir, "evaluation_results.json")
+    summary = {
+        "overall_accuracy": accuracy,
+        "correct_predictions": correct_count,
+        "total_strains": len(results),
+        "timestamp": timestamp,
+        "results": results
+    }
+    with open(json_path, 'w') as f:
+        json.dump(summary, f, indent=2)
             
     return report_path
 
@@ -138,7 +150,10 @@ def collect_testset(
             (2, 'ob'), (2, 'rev'),
         ]
         
-        for segment_idx, preferred_angle in test_configs:
+        # Track which (image_id, angle) combinations have been used to ensure diversity
+        used_image_angle_per_env = defaultdict(set)
+        
+        for test_idx, (segment_idx, preferred_angle) in enumerate(test_configs):
             test_set = []
             
             # For each environment, pick the image with this segment_index and angle
@@ -155,28 +170,58 @@ def collect_testset(
                     }
                     for angle_var in angle_variations.get(preferred_angle, [preferred_angle]):
                         if angle_var in segment_images[segment_idx] and segment_images[segment_idx][angle_var]:
-                            img_selected = segment_images[segment_idx][angle_var][0]
+                            candidates = segment_images[segment_idx][angle_var]
+                            # Try to find an unused (image_id, angle) combination
+                            for candidate in candidates:
+                                combo_key = (candidate['image_id'], candidate.get('angle', 'unknown'))
+                                if combo_key not in used_image_angle_per_env[env]:
+                                    img_selected = candidate
+                                    break
+                            # If all are used, take the first one anyway
+                            if img_selected is None and candidates:
+                                img_selected = candidates[0]
                             break
                     
                     # If preferred angle not found, use any angle from this segment
                     if img_selected is None:
-                        for angle in segment_images[segment_idx]:
-                            if segment_images[segment_idx][angle]:
-                                img_selected = segment_images[segment_idx][angle][0]
+                        for angle in sorted(segment_images[segment_idx].keys()):
+                            candidates = segment_images[segment_idx][angle]
+                            if candidates:
+                                # Try to find an unused (image_id, angle) combination
+                                for candidate in candidates:
+                                    combo_key = (candidate['image_id'], candidate.get('angle', 'unknown'))
+                                    if combo_key not in used_image_angle_per_env[env]:
+                                        img_selected = candidate
+                                        break
+                                if img_selected is None:
+                                    img_selected = candidates[0]
                                 break
                 
-                # Fallback: use any available image from this environment
+                # Fallback: use any available image from this environment, preferring unused (image_id, angle) combinations
                 if img_selected is None:
                     for seg_idx in sorted(segment_images.keys()):
-                        for angle in segment_images[seg_idx]:
-                            if segment_images[seg_idx][angle]:
-                                img_selected = segment_images[seg_idx][angle][0]
-                                break
+                        for angle in sorted(segment_images[seg_idx].keys()):
+                            candidates = segment_images[seg_idx][angle]
+                            if candidates:
+                                # Try to find an unused (image_id, angle) combination
+                                for candidate in candidates:
+                                    combo_key = (candidate['image_id'], candidate.get('angle', 'unknown'))
+                                    if combo_key not in used_image_angle_per_env[env]:
+                                        img_selected = candidate
+                                        break
+                                if img_selected is not None:
+                                    break
                         if img_selected is not None:
                             break
                 
+                # Only add to test set if we found a unique image
                 if img_selected is not None:
                     test_set.append(img_selected)
+                    combo_key = (img_selected['image_id'], img_selected.get('angle', 'unknown'))
+                    used_image_angle_per_env[env].add(combo_key)
+                else:
+                    # Can't find unique image for this environment, skip this test set
+                    break
             
             # Only add test set if it has images from all environments
             if test_set and len(test_set) == len(env_segment_angle_images):
@@ -288,10 +333,13 @@ def run_species_evaluation(
     without_siblings: bool = True,
     environment: str = None,
     strategy: str = "avg",
-    output_dir: str = str(RESULTS_DIR)
+    output_dir: str = str(RESULTS_DIR),
+    generate_visualizations: bool = False
 ) -> Tuple[List[Dict[str, Any]], str]:
     
     import pandas as pd
+    from src.classification.visualization.visualize_prediction import batch_visualize_predictions
+    
     if not STRAIN_SPECIES_MAPPING_PATH.exists():
         print(f"Error: {STRAIN_SPECIES_MAPPING_PATH} not found. Please run 'python src/main.py generate-mapping' first.")
         return [], ""
@@ -351,6 +399,44 @@ def run_species_evaluation(
         
     report_path = print_prediction_results(results, output_dir)
     draw_confusion_matrix(results, os.path.join(output_dir, "confusion_matrix.png"))
+    
+    # Generate visualizations if requested
+    if generate_visualizations and results:
+        from src.config import SEGMENTED_IMAGE_DIR
+        
+        print("\nGenerating visualizations...")
+        
+        # Visualize correct predictions
+        correct_dir = os.path.join(output_dir, "visualizations", "correct")
+        os.makedirs(correct_dir, exist_ok=True)
+        correct_results = [r for r in results if r['correct']]
+        if correct_results:
+            print(f"  Visualizing {len(correct_results)} correct predictions...")
+            batch_visualize_predictions(
+                prediction_results=correct_results,
+                segmented_image_dir=str(SEGMENTED_IMAGE_DIR),
+                output_dir=correct_dir,
+                k=k,
+                filter_correct=True,
+                max_visualizations=None  # Visualize all
+            )
+        
+        # Visualize incorrect predictions
+        incorrect_dir = os.path.join(output_dir, "visualizations", "incorrect")
+        os.makedirs(incorrect_dir, exist_ok=True)
+        incorrect_results = [r for r in results if not r['correct']]
+        if incorrect_results:
+            print(f"  Visualizing {len(incorrect_results)} incorrect predictions...")
+            batch_visualize_predictions(
+                prediction_results=incorrect_results,
+                segmented_image_dir=str(SEGMENTED_IMAGE_DIR),
+                output_dir=incorrect_dir,
+                k=k,
+                filter_correct=False,
+                max_visualizations=None  # Visualize all
+            )
+        
+        print(f"  Visualizations saved to: {os.path.join(output_dir, 'visualizations')}")
     
     return results, report_path
 

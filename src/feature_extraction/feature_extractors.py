@@ -14,7 +14,7 @@ import torchvision.transforms as transforms
 from torchvision.models import (
     resnet50, ResNet50_Weights,
     mobilenet_v2, MobileNet_V2_Weights,
-    efficientnet_v2_s, EfficientNet_V2_S_Weights
+    efficientnet_b1, EfficientNet_B1_Weights
 )
 
 
@@ -440,46 +440,23 @@ class MobileNetV2Extractor(BaseDeepLearningExtractor):
         return MobileNetV2Features(model)
 
 
-class EfficientNetV2B0Extractor(BaseDeepLearningExtractor):
-    """EfficientNetV2-S feature extractor (closest to B0/Small)."""
+class EfficientNetB1Extractor(BaseDeepLearningExtractor):
+    """EfficientNet B1 feature extractor with ImageNet weights."""
 
     def __init__(
         self,
         target_size: Tuple[int, int] = (224, 224),
         weights_path: Optional[str] = None
     ):
-        super().__init__("EfficientNetV2B0", target_size, weights_path)
+        super().__init__("EfficientNetB1", target_size, weights_path)
         
     def _build_model(self, weights_path: Optional[str]) -> nn.Module:
-        if weights_path and os.path.exists(weights_path):
-            print(
-                f"Loading fine-tuned EfficientNetV2 weights from: "
-                f"{weights_path}"
-            )
-            model = efficientnet_v2_s(weights=None)
-            try:
-                checkpoint = torch.load(
-                    weights_path,
-                    map_location=self.device
-                )
-                state_dict = checkpoint.get('state_dict', checkpoint)
-                model.load_state_dict(state_dict, strict=False)
-                print("✓ Fine-tuned weights loaded")
-            except Exception as e:
-                print(
-                    f"Warning: Failed to load fine-tuned weights: {e}"
-                )
-                model = efficientnet_v2_s(
-                    weights=EfficientNet_V2_S_Weights.DEFAULT
-                )
-        else:
-            model = efficientnet_v2_s(
-                weights=EfficientNet_V2_S_Weights.DEFAULT
-            )
+        # Always use ImageNet weights
+        model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
 
-        # EfficientNetV2 classifier is a Sequential block.
-        # We want features before the classifier.
-        model.classifier = nn.Identity()
+        # Remove classifier to extract features
+        # EfficientNet classifier is a Sequential, replace with Identity
+        model.classifier = nn.Sequential(nn.Identity())
         return model
 
 

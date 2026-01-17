@@ -13,7 +13,7 @@ from src.config import (
 from src.feature_extraction.feature_extractors import (
     ResNet50Extractor,
     MobileNetV2Extractor,
-    EfficientNetV2B0Extractor,
+    EfficientNetB1Extractor,
     HOGExtractor,
     GaborExtractor,
     ColorHistogramExtractor,
@@ -42,7 +42,7 @@ def generate_features(
         ColorHistogramHSconcatResnet50(),  # Added back the combined extractor
         ResNet50Extractor(),
         MobileNetV2Extractor(),
-        EfficientNetV2B0Extractor(),
+        EfficientNetB1Extractor(),
         HOGExtractor(),
         GaborExtractor(),
         ColorHistogramExtractor(),
