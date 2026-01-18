@@ -217,7 +217,7 @@ def predict(
             client=client,
             collection_name=collection_name,
             query_image_id=image_id,
-            feature_type=feature_extractor.name.lower(),
+            feature_type=feature_extractor.name,
             num_neighbors=k
             * 10,  # Fetch significantly more to ensure enough non-siblings remain
             environment=(

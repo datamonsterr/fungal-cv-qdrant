@@ -1,6 +1,7 @@
 import json
 import os
 from abc import ABC, abstractmethod
+from pathlib import Path
 from typing import Any, List, Optional, Tuple
 
 import cv2
@@ -77,7 +78,7 @@ class HOGExtractor(FeatureExtractor):
         cells_per_block: Tuple[int, int] = (2, 2),
         target_size: Tuple[int, int] = (128, 128),
     ):
-        super().__init__("HOG")
+        super().__init__("hog")
         self.orientations = orientations
         self.pixels_per_cell = pixels_per_cell
         self.cells_per_block = cells_per_block
@@ -131,7 +132,7 @@ class GaborExtractor(FeatureExtractor):
         thetas: Optional[List[float]] = None,
         target_size: Tuple[int, int] = (128, 128),
     ):
-        super().__init__("Gabor")
+        super().__init__("gabor")
         self.frequencies = frequencies or [0.1, 0.2, 0.3, 0.4]
         self.thetas = thetas or [0, np.pi / 4, np.pi / 2, 3 * np.pi / 4]
         self.target_size = target_size
@@ -178,7 +179,7 @@ class ColorHistogramExtractor(FeatureExtractor):
     """Color histogram feature extractor."""
 
     def __init__(self, bins: int = 32, target_size: Tuple[int, int] = (128, 128)):
-        super().__init__("ColorHistogram")
+        super().__init__("colorhistogram")
         self.bins = bins
         self.target_size = target_size
 
@@ -213,7 +214,7 @@ class ColorHistogramHSExtractor(FeatureExtractor):
     """Color histogram extractor using HSV (H and S channels only)."""
 
     def __init__(self, bins: int = 32, target_size: Tuple[int, int] = (128, 128)):
-        super().__init__("ColorHistogramHS")
+        super().__init__("colorhistogramhs")
         self.bins = bins
         self.target_size = target_size
 
@@ -317,44 +318,17 @@ class ResNet50Extractor(BaseDeepLearningExtractor):
         target_size: Tuple[int, int] = (224, 224),
         weights_path: Optional[str] = None,
     ):
-        super().__init__("ResNet50", target_size, weights_path)
+        super().__init__("resnet50", target_size, weights_path)
 
     def _build_model(self, weights_path: Optional[str]) -> nn.Module:
         if weights_path and os.path.exists(weights_path):
-            print(f"Loading fine-tuned ResNet50 weights from: " f"{weights_path}")
-            # Load full model and remove head
-            # Assuming weights_path points to a state_dict of a
-            # model with a classifier
-            # We need to reconstruct the architecture used during
-            # training
+            print(f"Loading fine-tuned ResNet50 weights from: {weights_path}")
             model = resnet50(weights=None)
-            # Replace fc layer to match training (if needed)
-            # or just load state_dict
-            # For feature extraction, we want the backbone.
-            # If loading a full model checkpoint:
             try:
-                checkpoint = torch.load(weights_path, map_location=self.device)
-                if "state_dict" in checkpoint:
-                    state_dict = checkpoint["state_dict"]
-                else:
-                    state_dict = checkpoint
-
-                # If the checkpoint has a different fc layer, we
-                # might need to adjust
-                # But here we want features *before* the fc layer.
-                # ResNet50: (avgpool): AdaptiveAvgPool2d(1, 1),
-                # (fc): Linear(...)
-
-                # Load weights (ignoring fc if mismatch, or loading
-                # all if matching)
-                # A robust way is to load weights into the full model,
-                # then strip fc.
-                # However, if the trained model had a different number
-                # of classes, loading strict=True will fail.
-
-                # Let's assume we load what we can.
+                state_dict = torch.load(weights_path, map_location=self.device)
+                # Backbone weights saved without 'fc.' prefix
                 model.load_state_dict(state_dict, strict=False)
-                print("✓ Fine-tuned weights loaded (partial/full)")
+                print("✓ Fine-tuned ResNet50 weights loaded successfully")
             except Exception as e:
                 print(f"Warning: Failed to load fine-tuned weights: {e}")
                 print("Using ImageNet weights instead")
@@ -378,7 +352,7 @@ class MobileNetV2Extractor(BaseDeepLearningExtractor):
         target_size: Tuple[int, int] = (224, 224),
         weights_path: Optional[str] = None,
     ):
-        super().__init__("MobileNetV2", target_size, weights_path)
+        super().__init__("mobilenetv2", target_size, weights_path)
 
     def _build_model(self, weights_path: Optional[str]) -> nn.Module:
         if weights_path and os.path.exists(weights_path):
@@ -425,11 +399,23 @@ class EfficientNetB1Extractor(BaseDeepLearningExtractor):
         target_size: Tuple[int, int] = (224, 224),
         weights_path: Optional[str] = None,
     ):
-        super().__init__("EfficientNetB1", target_size, weights_path)
+        super().__init__("efficientnetb1", target_size, weights_path)
 
     def _build_model(self, weights_path: Optional[str]) -> nn.Module:
-        # Always use ImageNet weights
-        model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
+        if weights_path and os.path.exists(weights_path):
+            print(f"Loading fine-tuned EfficientNetB1 weights from: {weights_path}")
+            model = efficientnet_b1(weights=None)
+            try:
+                state_dict = torch.load(weights_path, map_location=self.device)
+                # Backbone weights saved without 'classifier.' prefix
+                model.load_state_dict(state_dict, strict=False)
+                print("✓ Fine-tuned EfficientNetB1 weights loaded successfully")
+            except Exception as e:
+                print(f"Warning: Failed to load weights: {e}")
+                print("Using ImageNet pretrained weights instead")
+                model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
+        else:
+            model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
 
         # Remove classifier to extract features
         # EfficientNet classifier is a Sequential, replace with Identity
@@ -451,7 +437,7 @@ class ColorHistogramHSconcatResnet50(FeatureExtractor):
         hist_target_size: Tuple[int, int] = (128, 128),
         resnet_target_size: Tuple[int, int] = (224, 224),
     ):
-        super().__init__("ColorHistogramHSconcatResnet50")
+        super().__init__("colorhistogramhsconcatresnet50")
         self.hist_weight = hist_weight
         self.hist_extractor = ColorHistogramHSExtractor(
             bins=bins, target_size=hist_target_size
@@ -547,3 +533,281 @@ def extract_features_from_dataset(
     print(f"Results saved to: {output_json_path}")
 
     return results
+
+
+# Fine-tuned extractor classes that point to the fine-tuned vectors in Qdrant
+class ResNet50FinetunedExtractor(ResNet50Extractor):
+    """ResNet50 extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
+
+    def __init__(self, weights_path: Optional[str] = "weights/ResNet50_finetuned.pth"):
+        super().__init__(weights_path=weights_path)
+        # Override name to match the vector name in Qdrant
+        self.name = "ResNet50_finetuned"
+
+
+class MobileNetV2FinetunedExtractor(MobileNetV2Extractor):
+    """MobileNetV2 extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
+
+    def __init__(self, weights_path: Optional[str] = "weights/MobileNetV2_finetuned.pth"):
+        super().__init__(weights_path=weights_path)
+        # Override name to match the vector name in Qdrant
+        self.name = "MobileNetV2_finetuned"
+
+
+class EfficientNetB1FinetunedExtractor(EfficientNetB1Extractor):
+    """EfficientNetB1 extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
+
+    def __init__(self, weights_path: Optional[str] = "weights/EfficientNetB1_finetuned.pth"):
+        super().__init__(weights_path=weights_path)
+        # Override name to match the vector name in Qdrant
+        self.name = "EfficientNetB1_finetuned"
+
+
+# ============================================================================
+# Vision Transformer (ViT) Implementation for CellViT/SAM/ViT-256
+# ============================================================================
+
+class PatchEmbed(nn.Module):
+    """Image to Patch Embedding for ViT."""
+
+    def __init__(self, img_size=256, patch_size=16, in_chans=3, embed_dim=768):
+        super().__init__()
+        self.img_size = img_size
+        self.patch_size = patch_size
+        self.num_patches = (img_size // patch_size) ** 2
+        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+
+    def forward(self, x):
+        x = self.proj(x).flatten(2).transpose(1, 2)
+        return x
+
+
+class Attention(nn.Module):
+    """Multi-head Self Attention."""
+
+    def __init__(self, dim, num_heads=8, qkv_bias=False, attn_drop=0.0, proj_drop=0.0):
+        super().__init__()
+        self.num_heads = num_heads
+        head_dim = dim // num_heads
+        self.scale = head_dim**-0.5
+        self.qkv = nn.Linear(dim, dim * 3, bias=qkv_bias)
+        self.attn_drop = nn.Dropout(attn_drop)
+        self.proj = nn.Linear(dim, dim)
+        self.proj_drop = nn.Dropout(proj_drop)
+
+    def forward(self, x):
+        B, N, C = x.shape
+        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]
+        attn = (q @ k.transpose(-2, -1)) * self.scale
+        attn = attn.softmax(dim=-1)
+        attn = self.attn_drop(attn)
+        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
+        x = self.proj(x)
+        x = self.proj_drop(x)
+        return x
+
+
+class MLP(nn.Module):
+    """MLP Block."""
+
+    def __init__(self, in_features, hidden_features=None, out_features=None, drop=0.0):
+        super().__init__()
+        out_features = out_features or in_features
+        hidden_features = hidden_features or in_features
+        self.fc1 = nn.Linear(in_features, hidden_features)
+        self.act = nn.GELU()
+        self.fc2 = nn.Linear(hidden_features, out_features)
+        self.drop = nn.Dropout(drop)
+
+    def forward(self, x):
+        x = self.fc1(x)
+        x = self.act(x)
+        x = self.drop(x)
+        x = self.fc2(x)
+        x = self.drop(x)
+        return x
+
+
+class TransformerBlock(nn.Module):
+    """Transformer Block."""
+
+    def __init__(self, dim, num_heads, mlp_ratio=4.0, qkv_bias=False, drop=0.0, attn_drop=0.0):
+        super().__init__()
+        self.norm1 = nn.LayerNorm(dim)
+        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        self.norm2 = nn.LayerNorm(dim)
+        mlp_hidden_dim = int(dim * mlp_ratio)
+        self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, drop=drop)
+
+    def forward(self, x):
+        x = x + self.attn(self.norm1(x))
+        x = x + self.mlp(self.norm2(x))
+        return x
+
+
+class VisionTransformer(nn.Module):
+    """Vision Transformer for feature extraction."""
+
+    def __init__(
+        self,
+        img_size=256,
+        patch_size=16,
+        in_chans=3,
+        embed_dim=768,
+        depth=12,
+        num_heads=12,
+        mlp_ratio=4.0,
+        qkv_bias=True,
+        drop_rate=0.0,
+        attn_drop_rate=0.0,
+    ):
+        super().__init__()
+        self.num_features = self.embed_dim = embed_dim
+
+        self.patch_embed = PatchEmbed(img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
+        num_patches = self.patch_embed.num_patches
+
+        self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
+        self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
+        self.pos_drop = nn.Dropout(p=drop_rate)
+
+        self.blocks = nn.ModuleList([
+            TransformerBlock(
+                dim=embed_dim,
+                num_heads=num_heads,
+                mlp_ratio=mlp_ratio,
+                qkv_bias=qkv_bias,
+                drop=drop_rate,
+                attn_drop=attn_drop_rate,
+            )
+            for _ in range(depth)
+        ])
+
+        self.norm = nn.LayerNorm(embed_dim)
+
+        nn.init.trunc_normal_(self.pos_embed, std=0.02)
+        nn.init.trunc_normal_(self.cls_token, std=0.02)
+
+    def forward(self, x):
+        B = x.shape[0]
+        x = self.patch_embed(x)
+
+        cls_tokens = self.cls_token.expand(B, -1, -1)
+        x = torch.cat((cls_tokens, x), dim=1)
+        x = x + self.pos_embed
+        x = self.pos_drop(x)
+
+        for blk in self.blocks:
+            x = blk(x)
+
+        x = self.norm(x)
+        return x[:, 0]  # Return cls token
+
+
+class ViTExtractor(BaseDeepLearningExtractor):
+    """Vision Transformer feature extractor with support for multiple pretrained weights."""
+
+    def __init__(
+        self,
+        weights_path: Optional[str] = None,
+        weights_type: str = "vit256_dino",
+        target_size: Tuple[int, int] = (256, 256),
+    ):
+        """
+        Args:
+            weights_path: Path to pretrained weights file
+            weights_type: Type of pretrained weights (cellvit_x20, cellvit_x40, sam_vit_b, sam_vit_l, sam_vit_h, vit256_dino)
+            target_size: Target image size
+        """
+        self.weights_type = weights_type
+        super().__init__(f"vit_{weights_type}", target_size, weights_path)
+
+    def _build_model(self, weights_path: Optional[str]) -> nn.Module:
+        # ViT-256 configuration (standard for CellViT/SAM/ViT-256)
+        model = VisionTransformer(
+            img_size=self.target_size[0],
+            patch_size=16,
+            in_chans=3,
+            embed_dim=768,
+            depth=12,
+            num_heads=12,
+            mlp_ratio=4.0,
+            qkv_bias=True,
+        )
+
+        if weights_path and os.path.exists(weights_path):
+            print(f"Loading ViT weights from: {weights_path}")
+            try:
+                checkpoint = torch.load(weights_path, map_location='cpu', weights_only=False)
+
+                if "model" in checkpoint:
+                    state_dict = checkpoint["model"]
+                elif "state_dict" in checkpoint:
+                    state_dict = checkpoint["state_dict"]
+                else:
+                    state_dict = checkpoint
+
+                # Remove classification head if present
+                state_dict = {k: v for k, v in state_dict.items() if not k.startswith("head")}
+
+                model.load_state_dict(state_dict, strict=False)
+                print(f"✓ ViT weights loaded successfully ({self.weights_type})")
+            except Exception as e:
+                print(f"Warning: Failed to load ViT weights: {e}")
+                print("Using random initialization")
+        else:
+            print(f"No pretrained weights found at {weights_path}. Using random initialization.")
+
+        return model
+
+
+class ViTCellVitX20Extractor(ViTExtractor):
+    """ViT with CellViT-256-x20 pretrained weights."""
+
+    def __init__(self, weights_path: str = "pretrained/CellViT/CellViT-256-x20.pth"):
+        super().__init__(weights_path=weights_path, weights_type="cellvit_x20")
+
+
+class ViTCellVitX40Extractor(ViTExtractor):
+    """ViT with CellViT-256-x40 pretrained weights."""
+
+    def __init__(self, weights_path: str = "pretrained/CellViT/CellViT-256-x40.pth"):
+        super().__init__(weights_path=weights_path, weights_type="cellvit_x40")
+
+
+class ViTSAMBExtractor(ViTExtractor):
+    """ViT with SAM Base (encoder-only) pretrained weights."""
+
+    def __init__(self, weights_path: str = "pretrained/SAM/sam_vit_b.pth"):
+        super().__init__(weights_path=weights_path, weights_type="sam_vit_b")
+
+
+class ViTSAMLExtractor(ViTExtractor):
+    """ViT with SAM Large (encoder-only) pretrained weights."""
+
+    def __init__(self, weights_path: str = "pretrained/SAM/sam_vit_l.pth"):
+        super().__init__(weights_path=weights_path, weights_type="sam_vit_l")
+
+
+class ViTSAMHExtractor(ViTExtractor):
+    """ViT with SAM Huge (encoder-only) pretrained weights."""
+
+    def __init__(self, weights_path: str = "pretrained/SAM/sam_vit_h.pth"):
+        super().__init__(weights_path=weights_path, weights_type="sam_vit_h")
+
+
+class ViT256DinoExtractor(ViTExtractor):
+    """ViT with ViT-256 DINO self-supervised pretrained weights."""
+
+    def __init__(self, weights_path: str = "pretrained/ViT-256/vit256_small_dino.pth"):
+        super().__init__(weights_path=weights_path, weights_type="vit256_dino")
+
+
+class ViTFinetunedExtractor(ViTExtractor):
+    """ViT extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
+
+    def __init__(self, weights_path: str = "weights/ViT_CellViT_finetuned.pth", weights_type: str = "vit256_dino"):
+        super().__init__(weights_path=weights_path, weights_type=weights_type)
+        # Override name to match the vector name in Qdrant
+        self.name = "ViT_finetuned"

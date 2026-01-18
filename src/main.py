@@ -349,13 +349,19 @@ def run_evaluate(args):  # noqa: C901
         ColorHistogramExtractor,
         ColorHistogramHSExtractor,
         EfficientNetB1Extractor,
+        EfficientNetB1FinetunedExtractor,
         GaborExtractor,
         HOGExtractor,
         MobileNetV2Extractor,
+        MobileNetV2FinetunedExtractor,
         ResNet50Extractor,
+        ResNet50FinetunedExtractor,
     )
 
     client = QdrantClient(url=QDRANT_URL)
+    
+    # Use custom collection if specified, otherwise use default
+    collection_name = args.collection if hasattr(args, 'collection') and args.collection else COLLECTION_NAME
 
     # Create timestamped results directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -374,7 +380,11 @@ def run_evaluate(args):  # noqa: C901
 
     # Define all strategies and environments
     all_strategies = ["uni", "weighted"]
-    all_environments = [None, "all", "E3_MEA", "E3_DG18", "E4_MEA", "E4_DG18"]
+    all_environments = [
+        None, "all",
+        "E3_MEA", "E3_DG18", "E3_CREA", "E3_CYA", "E3_CYA30", "E3_CYAS", "E3_YES",
+        "E4_MEA", "E4_DG18", "E4_CREA", "E4_CYA", "E4_CYA30", "E4_CYAS", "E4_YES"
+    ]
 
     # Determine which strategies to run
     if args.strategy.lower() == "all":
@@ -399,17 +409,32 @@ def run_evaluate(args):  # noqa: C901
             ("ColorHistogram", ColorHistogramExtractor()),
             ("ColorHistogramHS", ColorHistogramHSExtractor()),
         ]
+    elif args.extractor == "all-finetuned":
+        extractors = [
+            ("ResNet50_finetuned", ResNet50FinetunedExtractor()),
+            ("MobileNetV2_finetuned", MobileNetV2FinetunedExtractor()),
+            ("EfficientNetB1_finetuned", EfficientNetB1FinetunedExtractor()),
+        ]
     else:
         # Single extractor
         if args.extractor == "resnet50":
             extractor = ResNet50Extractor()
             extractor_name = "ResNet50"
+        elif args.extractor == "resnet50_finetuned":
+            extractor = ResNet50FinetunedExtractor()
+            extractor_name = "ResNet50_finetuned"
         elif args.extractor == "mobilenetv2":
             extractor = MobileNetV2Extractor()
             extractor_name = "MobileNetV2"
+        elif args.extractor == "mobilenetv2_finetuned":
+            extractor = MobileNetV2FinetunedExtractor()
+            extractor_name = "MobileNetV2_finetuned"
         elif args.extractor == "efficientnetb1":
             extractor = EfficientNetB1Extractor()
             extractor_name = "EfficientNetB1"
+        elif args.extractor == "efficientnetb1_finetuned":
+            extractor = EfficientNetB1FinetunedExtractor()
+            extractor_name = "EfficientNetB1_finetuned"
         elif args.extractor == "hog":
             extractor = HOGExtractor()
             extractor_name = "HOG"
@@ -454,7 +479,7 @@ def run_evaluate(args):  # noqa: C901
 
                 run_species_evaluation(
                     client=client,
-                    collection_name=COLLECTION_NAME,
+                    collection_name=collection_name,
                     feature_extractor=extractor,
                     k=args.k,
                     environment=env_value,
@@ -481,13 +506,26 @@ def run_evaluate_all(args):
         ColorHistogramExtractor,
         ColorHistogramHSExtractor,
         EfficientNetB1Extractor,
+        EfficientNetB1FinetunedExtractor,
         GaborExtractor,
         HOGExtractor,
         MobileNetV2Extractor,
+        MobileNetV2FinetunedExtractor,
         ResNet50Extractor,
+        ResNet50FinetunedExtractor,
+        ViT256DinoExtractor,
+        ViTCellVitX20Extractor,
+        ViTCellVitX40Extractor,
+        ViTFinetunedExtractor,
+        ViTSAMBExtractor,
+        ViTSAMHExtractor,
+        ViTSAMLExtractor,
     )
 
     client = QdrantClient(url=QDRANT_URL)
+    
+    # Use custom collection if specified, otherwise use default
+    collection_name = args.collection if hasattr(args, 'collection') and args.collection else COLLECTION_NAME
 
     # Create timestamped results directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -506,6 +544,18 @@ def run_evaluate_all(args):
         ("ColorHistogram", ColorHistogramExtractor()),
         ("ColorHistogramHS", ColorHistogramHSExtractor()),
     ]
+    
+    # If using fine-tuned collection, use fine-tuned extractors instead of DL models
+    if collection_name and "finetuned" in collection_name.lower():
+        all_extractors = [
+            ("ResNet50_finetuned", ResNet50FinetunedExtractor()),
+            ("MobileNetV2_finetuned", MobileNetV2FinetunedExtractor()),
+            ("EfficientNetB1_finetuned", EfficientNetB1FinetunedExtractor()),
+            ("HOG", HOGExtractor()),
+            ("Gabor", GaborExtractor()),
+            ("ColorHistogram", ColorHistogramExtractor()),
+            ("ColorHistogramHS", ColorHistogramHSExtractor()),
+        ]
 
     # Define all strategies and environments
     all_strategies = [("uni", "uni"), ("weighted", "avg")]
@@ -514,8 +564,18 @@ def run_evaluate_all(args):
         ("all", "all"),
         ("E3_MEA", "E3_MEA"),
         ("E3_DG18", "E3_DG18"),
+        ("E3_CREA", "E3_CREA"),
+        ("E3_CYA", "E3_CYA"),
+        ("E3_CYA30", "E3_CYA30"),
+        ("E3_CYAS", "E3_CYAS"),
+        ("E3_YES", "E3_YES"),
         ("E4_MEA", "E4_MEA"),
         ("E4_DG18", "E4_DG18"),
+        ("E4_CREA", "E4_CREA"),
+        ("E4_CYA", "E4_CYA"),
+        ("E4_CYA30", "E4_CYA30"),
+        ("E4_CYAS", "E4_CYAS"),
+        ("E4_YES", "E4_YES"),
     ]
 
     # Store results for CSV
@@ -544,13 +604,13 @@ def run_evaluate_all(args):
 
                 run_species_evaluation(
                     client=client,
-                    collection_name=COLLECTION_NAME,
+                    collection_name=collection_name,
                     feature_extractor=extractor,
                     k=args.k,
                     environment=env_value,
                     strategy=agg_strategy,
                     output_dir=str(output_dir),
-                    generate_visualizations=False,  # Skip visualizations for speed
+                    generate_visualizations=True,  # Skip visualizations for speed
                 )
 
                 # Read the results JSON to extract accuracy
@@ -618,6 +678,48 @@ def run_evaluate_all(args):
             f"{i:<6} {result['extractor']:<18} {result['strategy']:<12} {result['environment']:<12} {result['accuracy']:.4f}"
         )
     print("-" * 80)
+
+
+def run_extract_finetuned(args):
+    """Extract features using fine-tuned deep learning models."""
+    print("Extracting features with fine-tuned models...")
+    from src.scripts.extract_finetuned_features import main as extract_finetuned_main
+
+    extract_finetuned_main()
+    print("Fine-tuned feature extraction complete.")
+
+
+def run_upload_finetuned(args):
+    """Upload fine-tuned features to existing Qdrant collection."""
+    print("Uploading fine-tuned features to Qdrant...")
+    from src.scripts.upload_finetuned_features import main as upload_finetuned_main
+
+    upload_finetuned_main()
+    print("Fine-tuned feature upload complete.")
+
+
+def run_extract_vit(args):
+    """Extract features using Vision Transformer models."""
+    print(f"Extracting ViT features with {args.weights_type} weights...")
+    from src.scripts.extract_vit_features import extract_vit_features
+
+    extract_vit_features(
+        output_json_path=args.output,
+        weights_type=args.weights_type,
+    )
+    print("ViT feature extraction complete.")
+
+
+def run_upload_vit(args):
+    """Upload ViT features to Qdrant collection."""
+    print(f"Uploading ViT features to collection '{args.collection}'...")
+    from src.scripts.upload_vit_features import upload_vit_features
+
+    upload_vit_features(
+        features_json_path=args.features,
+        collection_name=args.collection,
+    )
+    print("ViT feature upload complete.")
 
 
 def run_report(args):
@@ -755,7 +857,7 @@ def main():
         "--extractor",
         type=str,
         default="resnet50",
-        help="Feature extractor to use (use 'all' to evaluate all extractors)",
+        help="Feature extractor to use (use 'all' for all extractors, 'all-finetuned' for fine-tuned models only, or specific: resnet50, resnet50_finetuned, mobilenetv2, mobilenetv2_finetuned, etc.)",
     )
     parser_evaluate.add_argument("--k", type=int, default=5, help="Number of neighbors")
     parser_evaluate.add_argument(
@@ -770,6 +872,12 @@ def main():
         default=None,
         help="Environment strategy: all, E1 (same env), E2 (all env), E3_<env> (specific env), E4_<env> (exclude env). Default: E1",
     )
+    parser_evaluate.add_argument(
+        "--collection",
+        type=str,
+        default=None,
+        help="Collection name to use (default: uses COLLECTION_NAME from config)",
+    )
     parser_evaluate.set_defaults(func=run_evaluate)
 
     # Evaluate All
@@ -779,6 +887,12 @@ def main():
     )
     parser_evaluate_all.add_argument(
         "--k", type=int, default=7, help="Number of neighbors"
+    )
+    parser_evaluate_all.add_argument(
+        "--collection",
+        type=str,
+        default=None,
+        help="Collection name to use (default: uses COLLECTION_NAME from config)",
     )
     parser_evaluate_all.set_defaults(func=run_evaluate_all)
 
@@ -807,6 +921,66 @@ def main():
     )
     parser_report.add_argument("--k", type=int, default=5, help="Number of neighbors")
     parser_report.set_defaults(func=run_report)
+
+    # Extract Fine-tuned
+    parser_extract_ft = subparsers.add_parser(
+        "extract-finetuned",
+        help="Extract features using fine-tuned deep learning models",
+    )
+    parser_extract_ft.set_defaults(func=run_extract_finetuned)
+
+    # Upload Fine-tuned
+    parser_upload_ft = subparsers.add_parser(
+        "upload-finetuned",
+        help="Upload fine-tuned features to existing Qdrant collection",
+    )
+    parser_upload_ft.set_defaults(func=run_upload_finetuned)
+
+    # Extract ViT
+    parser_extract_vit = subparsers.add_parser(
+        "extract-vit",
+        help="Extract features using Vision Transformer models",
+    )
+    parser_extract_vit.add_argument(
+        "--weights-type",
+        type=str,
+        default="vit256_dino",
+        choices=[
+            "cellvit_x20",
+            "cellvit_x40",
+            "sam_vit_b",
+            "sam_vit_l",
+            "sam_vit_h",
+            "vit256_dino",
+        ],
+        help="Type of ViT pretrained weights to use",
+    )
+    parser_extract_vit.add_argument(
+        "--output",
+        type=str,
+        default="Dataset/vit_features.json",
+        help="Output JSON file path",
+    )
+    parser_extract_vit.set_defaults(func=run_extract_vit)
+
+    # Upload ViT
+    parser_upload_vit = subparsers.add_parser(
+        "upload-vit",
+        help="Upload ViT features to Qdrant collection",
+    )
+    parser_upload_vit.add_argument(
+        "--features",
+        type=str,
+        default="Dataset/vit_features.json",
+        help="Path to ViT features JSON file",
+    )
+    parser_upload_vit.add_argument(
+        "--collection",
+        type=str,
+        default="myco_fungi_features_vit",
+        help="Name of the Qdrant collection",
+    )
+    parser_upload_vit.set_defaults(func=run_upload_vit)
 
     args = parser.parse_args()
 

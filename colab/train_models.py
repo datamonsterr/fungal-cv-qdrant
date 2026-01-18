@@ -1,11 +1,11 @@
 """
-Training script for Google Colab
-Adapted from src/training/train_models.py
+Training script for Google Colab - Feature Extractor Fine-tuning
+Trains deep learning backbones for feature extraction (without classification head)
 
 Usage in Colab:
 1. Mount Google Drive
-2. Ensure dataset is in /content/drive/MyDrive/mycoai/dataset
-3. Run this script
+2. Ensure dataset is in /content/drive/MyDrive/mycoai/Dataset/hierarchical
+3. Run this script to fine-tune ResNet50, MobileNetV2, and EfficientNetB1
 """
 
 import copy
@@ -14,6 +14,7 @@ import os
 from pathlib import Path
 from typing import Dict, List, Optional, Union
 
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import torch
@@ -22,11 +23,14 @@ import torch.optim as optim
 from PIL import Image
 from sklearn.preprocessing import LabelEncoder
 from torch.utils.data import DataLoader, Dataset
-from torchvision import models, transforms
+from torchvision import transforms
 from torchvision.models import (
-    EfficientNet_V2_S_Weights,
+    EfficientNet_B1_Weights,
     MobileNet_V2_Weights,
     ResNet50_Weights,
+    efficientnet_b1,
+    mobilenet_v2,
+    resnet50,
 )
 from tqdm import tqdm
 
@@ -56,6 +60,9 @@ ORIGINAL_DATASET_PATH = Path(
 FULL_IMAGE_PATH = Path(os.getenv("FULL_IMAGE_PATH", DATASET_ROOT / "full_image"))
 SEGMENTED_IMAGE_DIR = Path(
     os.getenv("SEGMENTED_IMAGE_DIR", DATASET_ROOT / "segmented_image")
+)
+HIERARCHICAL_DATASET_PATH = Path(
+    os.getenv("HIERARCHICAL_DATASET_PATH", DATASET_ROOT / "hierarchical")
 )
 
 # Metadata Paths
@@ -123,24 +130,92 @@ class FungiDataset(Dataset):
 
 
 def get_model(model_name: str, num_classes: int, device: torch.device) -> nn.Module:
+    """Build model with ImageNet weights, unfreeze all layers for training."""
     if model_name == "ResNet50":
-        model = models.resnet50(weights=ResNet50_Weights.DEFAULT)
+        model = resnet50(weights=ResNet50_Weights.DEFAULT)
+        # Unfreeze all layers
+        for param in model.parameters():
+            param.requires_grad = True
+        # Replace classification head
         num_ftrs = model.fc.in_features
         model.fc = nn.Linear(num_ftrs, num_classes)
     elif model_name == "MobileNetV2":
-        model = models.mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT)
-        # MobileNetV2 classifier is a Sequential block, last layer is [1]
+        model = mobilenet_v2(weights=MobileNet_V2_Weights.DEFAULT)
+        # Unfreeze all layers
+        for param in model.parameters():
+            param.requires_grad = True
+        # Replace classification head
         num_ftrs = model.classifier[1].in_features  # type: ignore[union-attr]
         model.classifier[1] = nn.Linear(num_ftrs, num_classes)  # type: ignore[assignment]
-    elif model_name == "EfficientNetV2B0":
-        # Using V2-S as closest/better alternative
-        model = models.efficientnet_v2_s(weights=EfficientNet_V2_S_Weights.DEFAULT)
+    elif model_name == "EfficientNetB1":
+        model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
+        # Unfreeze all layers
+        for param in model.parameters():
+            param.requires_grad = True
+        # Replace classification head
         num_ftrs = model.classifier[1].in_features  # type: ignore[union-attr]
         model.classifier[1] = nn.Linear(num_ftrs, num_classes)  # type: ignore[assignment]
     else:
         raise ValueError(f"Unknown model name: {model_name}")
 
     return model.to(device)
+
+
+def save_backbone_weights(model: nn.Module, model_name: str, save_path: Path):
+    """Save model backbone weights without the classification head."""
+    state_dict = model.state_dict()
+
+    # Remove classification head from state dict
+    if model_name == "ResNet50":
+        backbone_state = {
+            k: v for k, v in state_dict.items() if not k.startswith("fc.")
+        }
+    elif model_name == "MobileNetV2":
+        backbone_state = {
+            k: v for k, v in state_dict.items() if not k.startswith("classifier.")
+        }
+    elif model_name == "EfficientNetB1":  # noqa: W293
+        backbone_state = {
+            k: v for k, v in state_dict.items() if not k.startswith("classifier.")
+        }
+    else:
+        backbone_state = state_dict
+
+    torch.save(backbone_state, save_path)
+    print(f"Saved backbone weights (without classification head) to {save_path}")
+
+
+def visualize_training_history(
+    history: Dict[str, List[float]], model_name: str, save_path: Path
+):
+    """Visualize and save training history plots."""
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    # Plot accuracy
+    epochs = range(1, len(history["accuracy"]) + 1)
+    ax1.plot(epochs, history["accuracy"], "b-", label="Training Accuracy", linewidth=2)
+    ax1.plot(
+        epochs, history["val_accuracy"], "r-", label="Validation Accuracy", linewidth=2
+    )
+    ax1.set_title(f"{model_name} - Accuracy", fontsize=14, fontweight="bold")
+    ax1.set_xlabel("Epoch", fontsize=12)
+    ax1.set_ylabel("Accuracy", fontsize=12)
+    ax1.legend(fontsize=10)
+    ax1.grid(True, alpha=0.3)
+
+    # Plot loss
+    ax2.plot(epochs, history["loss"], "b-", label="Training Loss", linewidth=2)
+    ax2.plot(epochs, history["val_loss"], "r-", label="Validation Loss", linewidth=2)
+    ax2.set_title(f"{model_name} - Loss", fontsize=14, fontweight="bold")
+    ax2.set_xlabel("Epoch", fontsize=12)
+    ax2.set_ylabel("Loss", fontsize=12)
+    ax2.legend(fontsize=10)
+    ax2.grid(True, alpha=0.3)
+
+    plt.tight_layout()
+    plt.savefig(save_path, dpi=300, bbox_inches="tight")
+    plt.close()
+    print(f"Saved training visualization to {save_path}")
 
 
 # ============================================================================
@@ -215,9 +290,6 @@ def train_model(
                     best_acc = epoch_acc
                     best_model_wts = copy.deepcopy(model.state_dict())
                     epochs_no_improve = 0
-                    if save_path:
-                        torch.save(best_model_wts, save_path)
-                        print(f"Saved best model to {save_path}")
                 else:
                     epochs_no_improve += 1
 
@@ -239,9 +311,9 @@ def train_model(
 
 def main():  # noqa: C901
     # Configuration
-    BATCH_SIZE = 8
+    BATCH_SIZE = 16
     NUM_EPOCHS = 50
-    LEARNING_RATE = 0.001
+    LEARNING_RATE = 0.0001  # Lower LR for fine-tuning
     PATIENCE = 10
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -252,9 +324,9 @@ def main():  # noqa: C901
     print("Configuration:")
     print("=" * 60)
     print(f"DATASET_ROOT: {DATASET_ROOT}")
+    print(f"HIERARCHICAL_DATASET_PATH: {HIERARCHICAL_DATASET_PATH}")
     print(f"WEIGHTS_DIR: {WEIGHTS_DIR}")
     print(f"RESULTS_DIR: {RESULTS_DIR}")
-    print(f"SEGMENTED_IMAGE_DIR: {SEGMENTED_IMAGE_DIR}")
     print(f"SEGMENTED_METADATA_PATH: {SEGMENTED_METADATA_PATH}")
     print(f"STRAIN_SPECIES_MAPPING_PATH: {STRAIN_SPECIES_MAPPING_PATH}")
     print("=" * 60 + "\n")
@@ -273,7 +345,8 @@ def main():  # noqa: C901
         print("Please ensure the CSV has the proper format.")
         return
 
-    test_strain_set = set(df_mapping[df_mapping["Test"] is True]["Strain"].tolist())
+    # Filter test strains (where Test column is True)
+    test_strain_set = set(df_mapping[df_mapping["Test"]]["Strain"].tolist())
 
     print(f"Selected {len(test_strain_set)} strains for testing (one per species)")
 
@@ -296,12 +369,16 @@ def main():  # noqa: C901
 
     skipped_unknown = 0
     skipped_missing = 0
+    skipped_not_found = 0
 
     for item in metadata_list:
         # Handle both flat and nested metadata structure
         data = item.get("data", item)
         strain = data.get("strain")
         image_id = item.get("id")
+        environment = data.get("environment")
+        angle = data.get("angle")
+        parent_id = item.get("parent_id")
 
         if not strain or not image_id:
             skipped_missing += 1
@@ -314,8 +391,41 @@ def main():  # noqa: C901
             skipped_unknown += 1
             continue
 
-        image_path = SEGMENTED_IMAGE_DIR / f"{image_id}.jpg"
+        # Reconstruct hierarchical path using correct species from CSV
+        # Extract segment index from image_id (format: parent_id_segmentIndex)
+        if parent_id and "_" in image_id:
+            segment_suffix = image_id.split("_")[-1]
+        else:
+            segment_suffix = "0"
+
+        # Reconstruct the hierarchical filename
+        clean_strain = strain.replace(" ", "_").replace("/", "-")
+        hierarchical_filename = (
+            f"{clean_strain}_{environment}_{angle}_seg{segment_suffix}.jpg"
+        )
+
+        # Construct the full hierarchical path with correct species
+        hierarchical_path = (
+            HIERARCHICAL_DATASET_PATH
+            / species
+            / strain
+            / environment
+            / hierarchical_filename
+        )
+
+        # Fall back to segmented_image if hierarchical doesn't exist
+        if hierarchical_path.exists():
+            image_path = hierarchical_path
+        else:
+            image_path = SEGMENTED_IMAGE_DIR / f"{image_id}.jpg"
+
         if not image_path.exists():
+            skipped_not_found += 1
+            # Debug: print first few missing paths
+            if skipped_not_found <= 5:
+                print(f"  Warning: File not found: {image_path}")
+                print(f"    Tried hierarchical: {hierarchical_path}")
+                print(f"    Tried segmented: {SEGMENTED_IMAGE_DIR / f'{image_id}.jpg'}")
             continue
 
         if strain in test_strain_set:
@@ -327,6 +437,7 @@ def main():  # noqa: C901
 
     print(f"Skipped {skipped_unknown} images with unknown species")
     print(f"Skipped {skipped_missing} images with missing strain/id")
+    print(f"Skipped {skipped_not_found} images not found on disk")
 
     print(f"Training samples: {len(train_paths)}")
     print(f"Validation samples: {len(val_paths)}")
@@ -384,7 +495,7 @@ def main():  # noqa: C901
     }
 
     # Train models
-    models_to_train = ["ResNet50", "MobileNetV2", "EfficientNetV2B0"]
+    models_to_train = ["ResNet50", "MobileNetV2", "EfficientNetB1"]
 
     for model_name in models_to_train:
         print(f"\n{'='*60}")
@@ -395,8 +506,6 @@ def main():  # noqa: C901
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE)
 
-        save_path = WEIGHTS_DIR / f"{model_name}_finetuned.pth"
-
         history = train_model(
             model,
             dataloaders,
@@ -405,14 +514,22 @@ def main():  # noqa: C901
             device,
             num_epochs=NUM_EPOCHS,
             patience=PATIENCE,
-            save_path=save_path,
+            save_path=None,
         )
+
+        # Save backbone weights (without classification head)
+        backbone_save_path = WEIGHTS_DIR / f"{model_name}_finetuned.pth"
+        save_backbone_weights(model, model_name, backbone_save_path)
 
         # Save history
         history_path = WEIGHTS_DIR / f"{model_name}_history.json"
         with open(history_path, "w") as f:
             json.dump(history, f)
         print(f"Saved training history to {history_path}")
+
+        # Visualize training history
+        viz_path = WEIGHTS_DIR / f"{model_name}_training_history.png"
+        visualize_training_history(history, model_name, viz_path)
 
     print("\n" + "=" * 60)
     print("Training completed for all models!")

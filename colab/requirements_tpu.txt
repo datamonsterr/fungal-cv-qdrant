@@ -1,0 +1,11 @@
+# TPU-specific requirements for Google Colab
+# Install these when running on TPU v5e
+
+# PyTorch XLA for TPU support
+torch-xla[tpu]~=2.1.0 -f https://storage.googleapis.com/libtpu-releases/index.html
+
+# Or install the nightly build for latest features:
+# torch-xla -f https://storage.googleapis.com/libtpu-wheels/index.html
+
+# Note: Make sure PyTorch version is compatible with torch-xla
+# Check compatibility at: https://github.com/pytorch/xla#-available-docker-images-and-wheels
