@@ -563,6 +563,41 @@ class EfficientNetB1FinetunedExtractor(EfficientNetB1Extractor):
         self.name = "EfficientNetB1_finetuned"
 
 
+class EfficientNetB1TripletExtractor(EfficientNetB1Extractor):
+    """EfficientNetB1 extractor that uses triplet loss fine-tuned weights."""
+
+    def __init__(self, weights_path: Optional[str] = "weights/EfficientNetB1_triplet.pth"):
+        super().__init__(weights_path=weights_path)
+        self.name = "efficientnetb1_triplet"
+
+    def _build_model(self, weights_path: Optional[str]) -> nn.Module:
+        if weights_path and os.path.exists(weights_path):
+            print(f"Loading fine-tuned EfficientNetB1 Triplet weights from: {weights_path}")
+            model = efficientnet_b1(weights=None)
+            try:
+                state_dict = torch.load(weights_path, map_location=self.device)
+                
+                # Filter out classifier weights because of dimension mismatch
+                # (128 vs 1000)
+                filtered_state_dict = {
+                    k: v for k, v in state_dict.items() 
+                    if not k.startswith("classifier.")
+                }
+                
+                model.load_state_dict(filtered_state_dict, strict=False)
+                print("✓ Fine-tuned EfficientNetB1 Triplet weights loaded successfully (classifier excluded)")
+            except Exception as e:
+                print(f"Warning: Failed to load weights: {e}")
+                print("Using ImageNet pretrained weights instead")
+                model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
+        else:
+            model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
+
+        # Remove classifier to extract features
+        model.classifier = nn.Sequential(nn.Identity())
+        return model
+
+
 # ============================================================================
 # Vision Transformer (ViT) Implementation for CellViT/SAM/ViT-256
 # ============================================================================

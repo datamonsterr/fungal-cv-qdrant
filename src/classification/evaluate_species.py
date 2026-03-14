@@ -1,7 +1,9 @@
+import csv
 import json
 import os
 from collections import defaultdict
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from qdrant_client import QdrantClient
@@ -71,6 +73,75 @@ def print_prediction_results(results: List[Dict[str, Any]], output_dir: str) -> 
         json.dump(summary, f, indent=2)
 
     return report_path
+
+
+def write_evaluation_csv(
+    results: List[Dict[str, Any]],
+    output_dir: str,
+    feature_extractor: FeatureExtractor,
+    environment: Optional[str],
+    strategy: str,
+) -> Optional[str]:
+    if not results:
+        return None
+
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
+
+    # Map environment label
+    if environment is None:
+        media_label = "same"
+    elif isinstance(environment, str) and environment.lower() == "all":
+        media_label = "all"
+    else:
+        media_label = str(environment)
+
+    # Map aggregation label
+    agg_label = "weighted" if strategy == "avg" else strategy
+
+    max_rank = max(len(r.get("aggregated_results", [])) for r in results)
+
+    base_fields = [
+        "strain",
+        "test_set_index",
+        "ground_truth",
+        "feature_extractor",
+        "media",
+        "aggregation",
+    ]
+
+    rank_fields = []
+    for rank in range(1, max_rank + 1):
+        rank_fields.append(f"rank{rank}_species")
+        rank_fields.append(f"rank{rank}_score")
+
+    fieldnames = base_fields + rank_fields
+
+    csv_name = f"{output_path.name}.csv"
+    csv_path = output_path / csv_name
+
+    with open(csv_path, "w", newline="") as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+        writer.writeheader()
+
+        for result in results:
+            row = {
+                "strain": result.get("strain"),
+                "test_set_index": result.get("test_set_index"),
+                "ground_truth": result.get("ground_truth"),
+                "feature_extractor": feature_extractor.name,
+                "media": media_label,
+                "aggregation": agg_label,
+            }
+
+            aggregated = result.get("aggregated_results", [])
+            for idx, entry in enumerate(aggregated, start=1):
+                row[f"rank{idx}_species"] = entry.get("specy")
+                row[f"rank{idx}_score"] = entry.get("score")
+
+            writer.writerow(row)
+
+    return str(csv_path)
 
 
 def collect_testset(
@@ -444,6 +515,16 @@ def run_species_evaluation(
 
     report_path = print_prediction_results(results, output_dir)
     draw_confusion_matrix(results, os.path.join(output_dir, "confusion_matrix.png"))
+
+    csv_path = write_evaluation_csv(
+        results=results,
+        output_dir=output_dir,
+        feature_extractor=feature_extractor,
+        environment=environment,
+        strategy=strategy,
+    )
+    if csv_path:
+        print(f"CSV saved to: {csv_path}")
 
     # Generate visualizations if requested
     if generate_visualizations and results:

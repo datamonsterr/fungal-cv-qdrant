@@ -21,6 +21,7 @@ from src.config import (
 )  # noqa: E402
 from src.feature_extraction.feature_extractors import (  # noqa: E402
     EfficientNetB1Extractor,
+    EfficientNetB1TripletExtractor,
     MobileNetV2Extractor,
     ResNet50Extractor,
 )
@@ -87,6 +88,24 @@ def extract_finetuned_features(  # noqa: C901
         )
     else:
         print(f"Warning: EfficientNetB1 weights not found at {efficientnet_weights}")
+
+    efficientnet_triplet_weights = weights_dir / "EfficientNetB1_triplet.pth"
+    if efficientnet_triplet_weights.exists():
+        print(
+            f"Initializing EfficientNetB1 Triplet with fine-tuned weights: {efficientnet_triplet_weights}"
+        )
+        extractors.append(
+            (
+                "EfficientNetB1_triplet",
+                EfficientNetB1TripletExtractor(
+                    weights_path=str(efficientnet_triplet_weights)
+                ),
+            )
+        )
+    else:
+        print(
+            f"Warning: EfficientNetB1 Triplet weights not found at {efficientnet_triplet_weights}"
+        )
 
     if not extractors:
         print("Error: No fine-tuned weights found!")

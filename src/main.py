@@ -123,6 +123,7 @@ def run_predict_new(args):  # noqa: C901
         ColorHistogramExtractor,
         ColorHistogramHSExtractor,
         EfficientNetB1Extractor,
+        EfficientNetB1TripletExtractor,
         GaborExtractor,
         HOGExtractor,
         MobileNetV2Extractor,
@@ -146,6 +147,8 @@ def run_predict_new(args):  # noqa: C901
         extractor = MobileNetV2Extractor()
     elif args.extractor == "efficientnetb1":
         extractor = EfficientNetB1Extractor()
+    elif args.extractor == "efficientnetb1_triplet":
+        extractor = EfficientNetB1TripletExtractor()
     elif args.extractor == "hog":
         extractor = HOGExtractor()
     elif args.extractor == "gabor":
@@ -350,12 +353,20 @@ def run_evaluate(args):  # noqa: C901
         ColorHistogramHSExtractor,
         EfficientNetB1Extractor,
         EfficientNetB1FinetunedExtractor,
+        EfficientNetB1TripletExtractor,
         GaborExtractor,
         HOGExtractor,
         MobileNetV2Extractor,
         MobileNetV2FinetunedExtractor,
         ResNet50Extractor,
         ResNet50FinetunedExtractor,
+        ViT256DinoExtractor,
+        ViTCellVitX20Extractor,
+        ViTCellVitX40Extractor,
+        ViTFinetunedExtractor,
+        ViTSAMBExtractor,
+        ViTSAMHExtractor,
+        ViTSAMLExtractor,
     )
 
     client = QdrantClient(url=QDRANT_URL)
@@ -435,6 +446,9 @@ def run_evaluate(args):  # noqa: C901
         elif args.extractor == "efficientnetb1_finetuned":
             extractor = EfficientNetB1FinetunedExtractor()
             extractor_name = "EfficientNetB1_finetuned"
+        elif args.extractor == "efficientnetb1_triplet":
+            extractor = EfficientNetB1TripletExtractor()
+            extractor_name = "EfficientNetB1_triplet"
         elif args.extractor == "hog":
             extractor = HOGExtractor()
             extractor_name = "HOG"
@@ -447,6 +461,27 @@ def run_evaluate(args):  # noqa: C901
         elif args.extractor == "colorhistogramhs":
             extractor = ColorHistogramHSExtractor()
             extractor_name = "ColorHistogramHS"
+        elif args.extractor == "vit256_dino":
+            extractor = ViT256DinoExtractor()
+            extractor_name = "ViT256Dino"
+        elif args.extractor == "cellvit_x20":
+            extractor = ViTCellVitX20Extractor()
+            extractor_name = "ViTCellVitX20"
+        elif args.extractor == "cellvit_x40":
+            extractor = ViTCellVitX40Extractor()
+            extractor_name = "ViTCellVitX40"
+        elif args.extractor == "sam_vit_b":
+            extractor = ViTSAMBExtractor()
+            extractor_name = "ViTSAMB"
+        elif args.extractor == "sam_vit_l":
+            extractor = ViTSAMLExtractor()
+            extractor_name = "ViTSAML"
+        elif args.extractor == "sam_vit_h":
+            extractor = ViTSAMHExtractor()
+            extractor_name = "ViTSAMH"
+        elif args.extractor == "vit_finetuned":
+            extractor = ViTFinetunedExtractor()
+            extractor_name = "ViT_finetuned"
         else:
             extractor = ResNet50Extractor()
             extractor_name = "ResNet50"
@@ -507,6 +542,7 @@ def run_evaluate_all(args):
         ColorHistogramHSExtractor,
         EfficientNetB1Extractor,
         EfficientNetB1FinetunedExtractor,
+        EfficientNetB1TripletExtractor,
         GaborExtractor,
         HOGExtractor,
         MobileNetV2Extractor,
@@ -551,6 +587,7 @@ def run_evaluate_all(args):
             ("ResNet50_finetuned", ResNet50FinetunedExtractor()),
             ("MobileNetV2_finetuned", MobileNetV2FinetunedExtractor()),
             ("EfficientNetB1_finetuned", EfficientNetB1FinetunedExtractor()),
+            ("EfficientNetB1_triplet", EfficientNetB1TripletExtractor()),
             ("HOG", HOGExtractor()),
             ("Gabor", GaborExtractor()),
             ("ColorHistogram", ColorHistogramExtractor()),
