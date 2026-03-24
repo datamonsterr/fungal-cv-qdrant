@@ -92,16 +92,6 @@ Dataset/full_image_metadata.json         ← id, strain, environment, angle, spe
 Dataset/segmented_image_metadata.json    ← + parent_id, segment_index, bbox
 ```
 
-Latest run output (Mar 17, 2026):
-```
-Running dataset reformatting...
-...
-Processing complete!
-Full images: 435
-Segmented images: 1305
-Dataset reformatting complete.
-```
-
 ### Step 2 — Generate Strain Mapping
 
 Scans the original dataset folders to build `strain_to_specy.csv`. Marks **one strain per species** as the hold-out test strain (second alphabetical strain if ≥2 exist).
@@ -110,20 +100,7 @@ Scans the original dataset folders to build `strain_to_specy.csv`. Marks **one s
 uv run python src/main.py generate-mapping
 ```
 
-Output:
-```
-Dataset/strain_to_specy.csv    ← columns: Strain, Species, Test
-```
-
-Example output:
-```
-Generating strain mapping...
-Scanning Dataset/original for strain-species mapping...
-Found 31 strains from folder names.
-Saved generated mapping to Dataset/strain_to_specy.csv
-Total Strains: 31
-Test Strains: 7
-```
+Output: `Dataset/strain_to_specy.csv` — columns: Strain, Species, Test (31 strains, 7 test)
 
 ### Step 3 — Feature Extraction (Standard)
 
@@ -191,7 +168,7 @@ Fine-tuned extractors:
 
 ### Step 5 — Train Models
 
-Fine-tunes ResNet50, MobileNetV2, and EfficientNetB1 on the training split (locally, no GPU required but recommended).  For GPU/TPU cloud training see `colab/train_models.py`.
+Fine-tunes ResNet50, MobileNetV2, and EfficientNetB1 on the training split (locally, no GPU required but recommended). For GPU/TPU cloud training see [`colab/TRAINING.md`](colab/TRAINING.md).
 
 ```bash
 uv run python src/main.py train
@@ -311,11 +288,13 @@ uv run python src/main.py report \
 ├── requirements.txt                       # Pip-compatible requirements
 ├── docker-compose.yml                     # Qdrant service
 ├── species_weights.json                   # Per-species manual ensemble weights
-├── colab/                                 # Google Colab training notebooks
+├── colab/                                 # Google Colab training scripts
 │   ├── train_models.py                    # Fine-tune ResNet50/MobileNetV2/EfficientNetB1
 │   ├── train_models_triplet_loss.py       # Triplet loss training for EfficientNetB1
-│   ├── train_models_selfsupervised.py     # Self-supervised pre-training
-│   └── train_models_cellvit.py            # CellViT-based ViT training
+│   ├── train_models_selfsupervised.py     # Self-supervised (SimCLR) pre-training
+│   ├── train_models_cellvit.py            # CellViT-based ViT training
+│   ├── TRAINING.md                        # Training approaches guide
+│   └── VIT_NOTES.md                       # ViT analysis, augmentation, TPU setup
 ├── src/
 │   ├── main.py                            # CLI entry point (all subcommands)
 │   ├── config.py                          # Centralized paths & constants

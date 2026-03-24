@@ -15,3 +15,4 @@ torch
 torchvision
 torchaudio
 tqdm
+gdown>=5.1.0

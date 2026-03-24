@@ -1,3 +1,8 @@
+import argparse
+import os
+import sys
+from pathlib import Path
+
 from qdrant_client import QdrantClient
 
 from src.config import (
@@ -8,10 +13,6 @@ from src.config import (
     SEGMENTED_IMAGE_DIR,
     SEGMENTED_METADATA_PATH,
 )
-import argparse
-import os
-import sys
-from pathlib import Path
 
 # Add the project root directory to sys.path to ensure imports work correctly
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -378,9 +379,13 @@ def run_evaluate(args):  # noqa: C901
     )
 
     client = QdrantClient(url=QDRANT_URL)
-    
+
     # Use custom collection if specified, otherwise use default
-    collection_name = args.collection if hasattr(args, 'collection') and args.collection else COLLECTION_NAME
+    collection_name = (
+        args.collection
+        if hasattr(args, "collection") and args.collection
+        else COLLECTION_NAME
+    )
 
     # Create timestamped results directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -400,9 +405,22 @@ def run_evaluate(args):  # noqa: C901
     # Define all strategies and environments
     all_strategies = ["uni", "weighted"]
     all_environments = [
-        None, "all",
-        "E3_MEA", "E3_DG18", "E3_CREA", "E3_CYA", "E3_CYA30", "E3_CYAS", "E3_YES",
-        "E4_MEA", "E4_DG18", "E4_CREA", "E4_CYA", "E4_CYA30", "E4_CYAS", "E4_YES"
+        None,
+        "all",
+        "E3_MEA",
+        "E3_DG18",
+        "E3_CREA",
+        "E3_CYA",
+        "E3_CYA30",
+        "E3_CYAS",
+        "E3_YES",
+        "E4_MEA",
+        "E4_DG18",
+        "E4_CREA",
+        "E4_CYA",
+        "E4_CYA30",
+        "E4_CYAS",
+        "E4_YES",
     ]
 
     # Determine which strategies to run
@@ -567,9 +585,13 @@ def run_evaluate_all(args):
     )
 
     client = QdrantClient(url=QDRANT_URL)
-    
+
     # Use custom collection if specified, otherwise use default
-    collection_name = args.collection if hasattr(args, 'collection') and args.collection else COLLECTION_NAME
+    collection_name = (
+        args.collection
+        if hasattr(args, "collection") and args.collection
+        else COLLECTION_NAME
+    )
 
     # Create timestamped results directory
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
@@ -588,7 +610,7 @@ def run_evaluate_all(args):
         ("ColorHistogram", ColorHistogramExtractor()),
         ("ColorHistogramHS", ColorHistogramHSExtractor()),
     ]
-    
+
     # If using fine-tuned collection, use fine-tuned extractors instead of DL models
     if collection_name and "finetuned" in collection_name.lower():
         all_extractors = [
@@ -766,6 +788,7 @@ def run_upload_vit(args):
     )
     print("ViT feature upload complete.")
 
+
 def run_cross_validate(args):
     """Run 5-fold strain-level cross-validation."""
     print("Running 5-fold cross-validation...")
@@ -829,6 +852,21 @@ def run_report(args):
         k=args.k,
     )
     print("Comprehensive report complete.")
+
+
+def run_download_dataset(args: argparse.Namespace) -> None:
+    """Handler for the download-dataset subcommand."""
+    from src.scripts.gdrive_download import run_download
+
+    exit_code = run_download(
+        url=args.url,
+        target=args.target,
+        force=args.force,
+        quiet=args.quiet,
+        fuzzy=False,
+    )
+    if exit_code != 0:
+        sys.exit(exit_code)
 
 
 def main():
@@ -1118,6 +1156,33 @@ def main():
         help="Generate visualizations from cross-validation results (reads report/week_1_2/cv_results.csv)",
     )
     parser_cv_viz.set_defaults(func=run_cross_validate_visualize)
+
+    # Download Dataset
+    parser_download = subparsers.add_parser(
+        "download-dataset",
+        help="Download a dataset from a shared Google Drive URL",
+    )
+    parser_download.add_argument(
+        "--url",
+        required=True,
+        help="Shared Google Drive URL (file or folder)",
+    )
+    parser_download.add_argument(
+        "--target",
+        required=True,
+        help="Local target directory to download into",
+    )
+    parser_download.add_argument(
+        "--force",
+        action="store_true",
+        help="Re-download files that already exist",
+    )
+    parser_download.add_argument(
+        "--quiet",
+        action="store_true",
+        help="Suppress progress output",
+    )
+    parser_download.set_defaults(func=run_download_dataset)
 
     args = parser.parse_args()
 

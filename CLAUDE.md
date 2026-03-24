@@ -154,10 +154,12 @@ Project skills are symlinked from `.agents/skills/` and managed via `npx skills`
 | `docker-expert` / `multi-stage-dockerfile` | Docker / Compose setup |
 | `find-skills` | Discover and install new skills via `npx skills` |
 
-## Documentation (`docs/`)
+## Documentation
 
 | File | Topic |
 |------|-------|
-| [`FINETUNED_FEATURES.md`](docs/FINETUNED_FEATURES.md) | Finetuned model workflow (extract → upload → evaluate) |
-| [`VIT_FEATURE_EXTRACTION.md`](docs/VIT_FEATURE_EXTRACTION.md) | ViT model setup and usage |
-| [`ENSEMBLE_STRATEGY.md`](docs/ENSEMBLE_STRATEGY.md) | Aggregation strategies and per-species weight tuning |
+| [`docs/FINETUNED_FEATURES.md`](docs/FINETUNED_FEATURES.md) | Finetuned model workflow (extract → upload → evaluate) |
+| [`docs/VIT_FEATURE_EXTRACTION.md`](docs/VIT_FEATURE_EXTRACTION.md) | ViT model setup and usage |
+| [`docs/ENSEMBLE_STRATEGY.md`](docs/ENSEMBLE_STRATEGY.md) | Aggregation strategies and per-species weight tuning |
+| [`colab/TRAINING.md`](colab/TRAINING.md) | Colab training approaches (ImageNet, CellViT, SimCLR) |
+| [`colab/VIT_NOTES.md`](colab/VIT_NOTES.md) | ViT analysis, augmentation strategy, TPU setup |
