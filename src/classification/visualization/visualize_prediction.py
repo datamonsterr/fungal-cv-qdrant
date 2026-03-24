@@ -1,11 +1,8 @@
 import os
+from math import ceil
 from typing import Any, Dict, List, Optional, Tuple
 
-import cv2
-import numpy as np
 from PIL import Image, ImageDraw, ImageFont
-
-from src.config import RESULTS_DIR, SEGMENTED_IMAGE_DIR
 
 
 def generate_distinct_color(
@@ -45,12 +42,162 @@ def generate_distinct_color(
     return COLOR_PALETTE[color_index]
 
 
+def _get_thumbnail_size(k: int) -> Tuple[int, int]:
+    if k >= 11:
+        return (96, 96)
+    if k >= 9:
+        return (108, 108)
+    if k >= 7:
+        return (124, 124)
+    return (150, 150)
+
+
+def _text_size(
+    draw: ImageDraw.ImageDraw, text: str, font: ImageFont.ImageFont
+) -> Tuple[int, int]:
+    left, top, right, bottom = draw.textbbox((0, 0), text, font=font)
+    return right - left, bottom - top
+
+
+def _draw_wrapped_text(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    position: Tuple[int, int],
+    max_width: int,
+    font: ImageFont.ImageFont,
+    fill: Tuple[int, int, int],
+    line_spacing: int = 4,
+) -> int:
+    x_pos, y_pos = position
+    words = text.split()
+    lines: List[str] = []
+    current_line = ""
+
+    for word in words:
+        candidate = word if not current_line else f"{current_line} {word}"
+        candidate_width, _ = _text_size(draw, candidate, font)
+        if candidate_width <= max_width or not current_line:
+            current_line = candidate
+            continue
+
+        lines.append(current_line)
+        current_line = word
+
+    if current_line:
+        lines.append(current_line)
+
+    line_height = _text_size(draw, "Ag", font)[1]
+    for line in lines:
+        draw.text((x_pos, y_pos), line, fill=fill, font=font)
+        y_pos += line_height + line_spacing
+
+    return y_pos
+
+
+def _draw_legend(
+    draw: ImageDraw.ImageDraw,
+    aggregated_results: List[Dict[str, Any]],
+    ground_truth: str,
+    start_x: int,
+    start_y: int,
+    canvas_width: int,
+    text_font: ImageFont.ImageFont,
+    small_font: ImageFont.ImageFont,
+    text_color: Tuple[int, int, int],
+    padding: int,
+) -> int:
+    draw.text(
+        (start_x, start_y),
+        "Top Species Ranking:",
+        fill=text_color,
+        font=text_font,
+    )
+    y_pos = start_y + _text_size(draw, "Ag", text_font)[1] + 8
+    box_size = 15
+    item_gap_x = 18
+    item_gap_y = 10
+    max_item_width = max(220, (canvas_width - 2 * padding) // 2)
+    item_x = start_x
+    item_y = y_pos
+    max_y = item_y
+
+    for i, res in enumerate(aggregated_results[:5]):
+        specy = res["specy"]
+        score = res["score"]
+        color = generate_distinct_color(specy, ground_truth)
+        legend_text = f"{i + 1}. {specy} ({score:.2f})"
+        text_w, text_h = _text_size(draw, legend_text, small_font)
+        item_width = min(max_item_width, text_w + 30)
+
+        if item_x + item_width > canvas_width - padding:
+            item_x = start_x
+            item_y = max_y + item_gap_y
+
+        draw.rectangle(
+            [item_x, item_y + 2, item_x + box_size, item_y + 2 + box_size],
+            fill=color,
+        )
+        draw.text(
+            (item_x + box_size + 8, item_y),
+            legend_text,
+            fill=text_color,
+            font=small_font,
+        )
+
+        item_x += item_width + item_gap_x
+        max_y = max(max_y, item_y + text_h)
+
+    return max_y + 16
+
+
+def _draw_image_card(
+    canvas: Image.Image,
+    draw: ImageDraw.ImageDraw,
+    image_path: str,
+    position: Tuple[int, int],
+    thumbnail_size: Tuple[int, int],
+    border_color: Tuple[int, int, int],
+    border_width: int,
+    lines: List[Tuple[str, ImageFont.ImageFont]],
+    text_color: Tuple[int, int, int],
+    line_spacing: int = 4,
+) -> None:
+    x_pos, y_pos = position
+    img_width, img_height = thumbnail_size
+
+    if os.path.exists(image_path):
+        try:
+            img = Image.open(image_path).convert("RGB")
+            img = img.resize(thumbnail_size)
+            canvas.paste(img, (x_pos, y_pos))
+        except Exception as exc:
+            print(f"Error loading image {image_path}: {exc}")
+    else:
+        draw.rectangle(
+            [x_pos, y_pos, x_pos + img_width, y_pos + img_height],
+            outline=(160, 160, 160),
+            width=2,
+        )
+        draw.text((x_pos + 8, y_pos + 8), "Missing image", fill=text_color)
+
+    draw.rectangle(
+        [x_pos, y_pos, x_pos + img_width, y_pos + img_height],
+        outline=border_color,
+        width=border_width,
+    )
+
+    text_y = y_pos + img_height + 6
+    for text, font in lines:
+        draw.text((x_pos, text_y), text, fill=text_color, font=font)
+        text_y += _text_size(draw, text, font)[1] + line_spacing
+
+
 def visualize_prediction_by_environment(
     prediction_result: Dict[str, Any],
     segmented_image_dir: str,
     output_path: str,
     k: int = 7,
-    thumbnail_size: Tuple[int, int] = (150, 150),
+    thumbnail_size: Optional[Tuple[int, int]] = None,
     text_color: Tuple[int, int, int] = (0, 0, 0),
     bg_color: Tuple[int, int, int] = (255, 255, 255),
     border_width: int = 8,
@@ -68,11 +215,6 @@ def visualize_prediction_by_environment(
     raw_results = prediction_result["raw_results"]
     aggregated_results = prediction_result.get("aggregated_results", [])
 
-    # Create a species-to-rank mapping for quick lookup
-    species_rank_map = {}
-    for rank, agg_result in enumerate(aggregated_results, start=1):
-        species_rank_map[agg_result["specy"]] = rank
-
     # Sort raw_results by environment
     raw_results_sorted = sorted(
         raw_results, key=lambda x: x.get("query_environment", "")
@@ -83,22 +225,17 @@ def visualize_prediction_by_environment(
         print("No raw results to visualize.")
         return
 
-    # Layout parameters
-    img_width, img_height = thumbnail_size
-    text_height = 90
-    header_height = 250  # Increased for ranking legend
+    resolved_thumbnail_size = thumbnail_size or _get_thumbnail_size(k)
+    img_width, img_height = resolved_thumbnail_size
     padding = 15
-    row_spacing = 100
-
-    images_per_row = k + 1
-    canvas_width = images_per_row * (img_width + padding) + padding
-    canvas_height = header_height + num_environments * (
-        img_height + text_height + row_spacing
-    )
-
-    # Create canvas
-    canvas = Image.new("RGB", (canvas_width, canvas_height), bg_color)
-    draw = ImageDraw.Draw(canvas)
+    card_gap = 15
+    row_spacing = 24
+    env_label_gap = 34
+    text_height = 64
+    target_canvas_width = 1600
+    card_width = img_width + padding
+    columns = max(2, min(k + 1, max(2, (target_canvas_width - padding) // card_width)))
+    canvas_width = padding + columns * card_width
 
     # Load fonts (try to load a nice font, fallback to default)
     try:
@@ -110,52 +247,106 @@ def visualize_prediction_by_environment(
         text_font = ImageFont.load_default()
         small_font = ImageFont.load_default()
 
-    # --- Header Section ---
     title_text = f"Strain: {prediction_result['strain']} | Ground Truth: {ground_truth}"
     pred_text = (
         f"Predicted: {predicted_specy} ({confidence:.2f}) | Correct: {is_correct}"
     )
     info_text = f"Extractor: {feature_extractor} | Strategy: {aggregation_strategy}"
 
-    draw.text((padding, 20), title_text, fill=text_color, font=title_font)
-    draw.text(
-        (padding, 60),
-        pred_text,
-        fill=(0, 128, 0) if is_correct else (255, 0, 0),
-        font=title_font,
+    measure_canvas = Image.new("RGB", (canvas_width, 200), bg_color)
+    measure_draw = ImageDraw.Draw(measure_canvas)
+
+    header_y = 20
+    header_y = _draw_wrapped_text(
+        measure_draw,
+        title_text,
+        (padding, header_y),
+        canvas_width - 2 * padding,
+        title_font,
+        text_color,
     )
-    draw.text((padding, 100), info_text, fill=text_color, font=text_font)
+    header_y = _draw_wrapped_text(
+        measure_draw,
+        pred_text,
+        (padding, header_y + 4),
+        canvas_width - 2 * padding,
+        title_font,
+        (0, 128, 0) if is_correct else (255, 0, 0),
+    )
+    header_y = _draw_wrapped_text(
+        measure_draw,
+        info_text,
+        (padding, header_y + 4),
+        canvas_width - 2 * padding,
+        text_font,
+        text_color,
+    )
+    header_bottom = _draw_legend(
+        measure_draw,
+        aggregated_results,
+        ground_truth,
+        padding,
+        header_y + 8,
+        canvas_width,
+        text_font,
+        small_font,
+        text_color,
+        padding,
+    )
 
-    # Draw Ranking Legend
-    draw.text((padding, 130), "Top Species Ranking:", fill=text_color, font=text_font)
-    legend_x = padding
-    legend_y = 150
-    for i, res in enumerate(aggregated_results[:5]):  # Show top 5
-        specy = res["specy"]
-        score = res["score"]
-        color = generate_distinct_color(specy, ground_truth)
-        legend_text = f"{i+1}. {specy} ({score:.2f})"
+    cards_per_environment = k + 1
+    env_rows = ceil(cards_per_environment / columns)
+    env_block_height = (
+        env_label_gap + env_rows * (img_height + text_height + card_gap) + row_spacing
+    )
+    canvas_height = header_bottom + 16 + num_environments * env_block_height
 
-        # Draw colored box
-        draw.rectangle([legend_x, legend_y, legend_x + 15, legend_y + 15], fill=color)
-        draw.text(
-            (legend_x + 20, legend_y), legend_text, fill=text_color, font=small_font
-        )
+    canvas = Image.new("RGB", (canvas_width, canvas_height), bg_color)
+    draw = ImageDraw.Draw(canvas)
 
-        legend_x += 250
-        if legend_x > canvas_width - 200:
-            legend_x = padding
-            legend_y += 20
+    header_y = 20
+    header_y = _draw_wrapped_text(
+        draw,
+        title_text,
+        (padding, header_y),
+        canvas_width - 2 * padding,
+        title_font,
+        text_color,
+    )
+    header_y = _draw_wrapped_text(
+        draw,
+        pred_text,
+        (padding, header_y + 4),
+        canvas_width - 2 * padding,
+        title_font,
+        (0, 128, 0) if is_correct else (255, 0, 0),
+    )
+    header_y = _draw_wrapped_text(
+        draw,
+        info_text,
+        (padding, header_y + 4),
+        canvas_width - 2 * padding,
+        text_font,
+        text_color,
+    )
+    current_y = _draw_legend(
+        draw,
+        aggregated_results,
+        ground_truth,
+        padding,
+        header_y + 8,
+        canvas_width,
+        text_font,
+        small_font,
+        text_color,
+        padding,
+    ) + 16
 
-    # --- Grid Section ---
-    current_y = header_height
-
-    for row_idx, result in enumerate(raw_results_sorted):
+    for result in raw_results_sorted:
         query_id = result["query_image_id"]
         environment = result.get("query_environment", "unknown")
         neighbors = result["neighbors"]
 
-        # Draw Environment Label
         draw.text(
             (padding, current_y - 30),
             f"Environment: {environment}",
@@ -163,90 +354,51 @@ def visualize_prediction_by_environment(
             font=title_font,
         )
 
-        # 1. Draw Query Image
-        query_path = os.path.join(segmented_image_dir, f"{query_id}.jpg")
-        if os.path.exists(query_path):
-            try:
-                img = Image.open(query_path)
-                img = img.resize(thumbnail_size)
-                canvas.paste(img, (padding, current_y))
+        cards: List[Dict[str, Any]] = [
+            {
+                "image_path": os.path.join(segmented_image_dir, f"{query_id}.jpg"),
+                "border_color": (0, 0, 0),
+                "lines": [("Query", text_font), (f"ID: {query_id}", small_font)],
+            }
+        ]
 
-                # Draw border (Green if correct prediction for this query? Or just black for query)
-                # Let's use black for query
-                draw.rectangle(
-                    [padding, current_y, padding + img_width, current_y + img_height],
-                    outline=(0, 0, 0),
-                    width=4,
-                )
-
-                draw.text(
-                    (padding, current_y + img_height + 5),
-                    "Query",
-                    fill=text_color,
-                    font=text_font,
-                )
-                draw.text(
-                    (padding, current_y + img_height + 25),
-                    f"ID: {query_id}",
-                    fill=text_color,
-                    font=small_font,
-                )
-
-            except Exception as e:
-                print(f"Error loading query image {query_path}: {e}")
-
-        # 2. Draw Neighbors
-        for i, neighbor in enumerate(neighbors):
-            if i >= k:
-                break
-
+        for i, neighbor in enumerate(neighbors[:k], start=1):
             n_id = neighbor.get("image_id") or neighbor.get("id")
             n_specy = neighbor.get("specy", "unknown")
             n_score = neighbor.get("score", 0.0)
             n_strain = neighbor.get("strain", "unknown")
+            cards.append(
+                {
+                    "image_path": os.path.join(segmented_image_dir, f"{n_id}.jpg"),
+                    "border_color": generate_distinct_color(n_specy, ground_truth),
+                    "lines": [
+                        (f"#{i} {n_specy}", text_font),
+                        (f"Score: {n_score:.4f}", small_font),
+                        (f"Strain: {n_strain}", small_font),
+                    ],
+                }
+            )
 
-            x_pos = padding + (i + 1) * (img_width + padding)
+        grid_y = current_y
+        for card_index, card in enumerate(cards):
+            row_index = card_index // columns
+            column_index = card_index % columns
+            x_pos = padding + column_index * card_width
+            y_pos = grid_y + row_index * (img_height + text_height + card_gap)
 
-            n_path = os.path.join(segmented_image_dir, f"{n_id}.jpg")
-            if os.path.exists(n_path):
-                try:
-                    img = Image.open(n_path)
-                    img = img.resize(thumbnail_size)
-                    canvas.paste(img, (x_pos, current_y))
+            _draw_image_card(
+                canvas,
+                draw,
+                card["image_path"],
+                (x_pos, y_pos),
+                resolved_thumbnail_size,
+                card["border_color"],
+                border_width if card_index > 0 else 4,
+                card["lines"],
+                text_color,
+            )
 
-                    # Border color based on species match
-                    border_color = generate_distinct_color(n_specy, ground_truth)
-
-                    draw.rectangle(
-                        [x_pos, current_y, x_pos + img_width, current_y + img_height],
-                        outline=border_color,
-                        width=border_width,
-                    )
-
-                    # Text info
-                    draw.text(
-                        (x_pos, current_y + img_height + 5),
-                        f"#{i+1} {n_specy}",
-                        fill=text_color,
-                        font=text_font,
-                    )
-                    draw.text(
-                        (x_pos, current_y + img_height + 25),
-                        f"Score: {n_score:.4f}",
-                        fill=text_color,
-                        font=small_font,
-                    )
-                    draw.text(
-                        (x_pos, current_y + img_height + 40),
-                        f"Strain: {n_strain}",
-                        fill=text_color,
-                        font=small_font,
-                    )
-
-                except Exception as e:
-                    print(f"Error loading neighbor image {n_path}: {e}")
-
-        current_y += img_height + text_height + row_spacing
+        current_y += env_block_height
 
     # Save
     os.makedirs(os.path.dirname(output_path), exist_ok=True)

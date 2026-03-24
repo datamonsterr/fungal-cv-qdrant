@@ -444,7 +444,19 @@ def run_species_evaluation(
     strategy: str = "avg",
     output_dir: str = str(RESULTS_DIR),
     generate_visualizations: bool = False,
+    selected_strains: Optional[Dict[str, str]] = None,
 ) -> Tuple[List[Dict[str, Any]], str]:
+    """
+    Run species evaluation on test strains.
+
+    Parameters
+    ----------
+    selected_strains : dict, optional
+        Mapping of ``{species: strain}`` to use as the test set.
+        When provided, the CSV file is **not** read — useful for cross-validation
+        where each fold supplies its own test strains.  When *None* (default),
+        the test strains are loaded from *STRAIN_SPECIES_MAPPING_PATH*.
+    """
 
     import pandas as pd
 
@@ -452,24 +464,26 @@ def run_species_evaluation(
         batch_visualize_predictions,
     )
 
-    if not STRAIN_SPECIES_MAPPING_PATH.exists():
-        print(
-            f"Error: {STRAIN_SPECIES_MAPPING_PATH} not found. Please run 'python src/main.py generate-mapping' first."
-        )
-        return [], ""
+    if selected_strains is None:
+        # Default path: read held-out test strains from the mapping CSV
+        if not STRAIN_SPECIES_MAPPING_PATH.exists():
+            print(
+                f"Error: {STRAIN_SPECIES_MAPPING_PATH} not found. "
+                "Please run 'python src/main.py generate-mapping' first."
+            )
+            return [], ""
 
-    df_mapping = pd.read_csv(STRAIN_SPECIES_MAPPING_PATH)
-    if "Test" not in df_mapping.columns:
-        print(
-            "Error: 'Test' column not found in mapping CSV. Please regenerate mapping."
-        )
-        return [], ""
+        df_mapping = pd.read_csv(STRAIN_SPECIES_MAPPING_PATH)
+        if "Test" not in df_mapping.columns:
+            print(
+                "Error: 'Test' column not found in mapping CSV. Please regenerate mapping."
+            )
+            return [], ""
 
-    # Select strains where Test is True
-    test_df = df_mapping[df_mapping["Test"] == True]
-    selected_strains = {}
-    for _, row in test_df.iterrows():
-        selected_strains[row["Species"]] = row["Strain"]
+        test_df = df_mapping[df_mapping["Test"] == True]
+        selected_strains = {}
+        for _, row in test_df.iterrows():
+            selected_strains[row["Species"]] = row["Strain"]
 
     selection_report_path = print_selection_report(selected_strains, output_dir)
 

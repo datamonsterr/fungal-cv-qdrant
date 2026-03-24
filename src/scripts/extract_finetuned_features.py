@@ -7,6 +7,7 @@ using the fine-tuned weights from training.
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 import cv2
 
@@ -21,9 +22,6 @@ from src.config import (
 )  # noqa: E402
 from src.feature_extraction.feature_extractors import (  # noqa: E402
     EfficientNetB1Extractor,
-    EfficientNetB1TripletExtractor,
-    MobileNetV2Extractor,
-    ResNet50Extractor,
 )
 
 
@@ -32,6 +30,7 @@ def extract_finetuned_features(  # noqa: C901
     metadata_path: Path,
     weights_dir: Path,
     output_json_path: Path,
+    fold_index: Optional[int] = None,
 ) -> list[dict]:
     """
     Extract features using fine-tuned deep learning models.
@@ -51,71 +50,24 @@ def extract_finetuned_features(  # noqa: C901
 
     print(f"Found {len(metadata_list)} images in metadata")
 
-    # Initialize extractors with fine-tuned weights
-    extractors = []
-
-    resnet_weights = weights_dir / "ResNet50_finetuned.pth"
-    if resnet_weights.exists():
-        print(f"Initializing ResNet50 with fine-tuned weights: {resnet_weights}")
-        extractors.append(
-            ("ResNet50_finetuned", ResNet50Extractor(weights_path=str(resnet_weights)))
-        )
+    # EfficientNetB1-only flow for fold-aware CV
+    if fold_index is None:
+        efficientnet_weights = weights_dir / "EfficientNetB1_finetuned.pth"
     else:
-        print(f"Warning: ResNet50 weights not found at {resnet_weights}")
-
-    mobilenet_weights = weights_dir / "MobileNetV2_finetuned.pth"
-    if mobilenet_weights.exists():
-        print(f"Initializing MobileNetV2 with fine-tuned weights: {mobilenet_weights}")
-        extractors.append(
-            (
-                "MobileNetV2_finetuned",
-                MobileNetV2Extractor(weights_path=str(mobilenet_weights)),
-            )
-        )
-    else:
-        print(f"Warning: MobileNetV2 weights not found at {mobilenet_weights}")
-
-    efficientnet_weights = weights_dir / "EfficientNetB1_finetuned.pth"
-    if efficientnet_weights.exists():
-        print(
-            f"Initializing EfficientNetB1 with fine-tuned weights: {efficientnet_weights}"
-        )
-        extractors.append(
-            (
-                "EfficientNetB1_finetuned",
-                EfficientNetB1Extractor(weights_path=str(efficientnet_weights)),
-            )
-        )
-    else:
-        print(f"Warning: EfficientNetB1 weights not found at {efficientnet_weights}")
-
-    efficientnet_triplet_weights = weights_dir / "EfficientNetB1_triplet.pth"
-    if efficientnet_triplet_weights.exists():
-        print(
-            f"Initializing EfficientNetB1 Triplet with fine-tuned weights: {efficientnet_triplet_weights}"
-        )
-        extractors.append(
-            (
-                "EfficientNetB1_triplet",
-                EfficientNetB1TripletExtractor(
-                    weights_path=str(efficientnet_triplet_weights)
-                ),
-            )
-        )
-    else:
-        print(
-            f"Warning: EfficientNetB1 Triplet weights not found at {efficientnet_triplet_weights}"
+        efficientnet_weights = (
+            weights_dir / f"fold{fold_index}_EfficientNetB1_finetuned.pth"
         )
 
-    if not extractors:
-        print("Error: No fine-tuned weights found!")
-        print(f"Expected weights in: {weights_dir}")
-        print("  - ResNet50_finetuned.pth")
-        print("  - MobileNetV2_finetuned.pth")
-        print("  - EfficientNetB1_finetuned.pth")
+    if not efficientnet_weights.exists():
+        print(f"Error: EfficientNetB1 weights not found at {efficientnet_weights}")
         sys.exit(1)
 
-    print(f"\nExtracting features with {len(extractors)} fine-tuned models...")
+    print(
+        "Initializing EfficientNetB1 with fine-tuned weights: "
+        f"{efficientnet_weights}"
+    )
+    extractor_name = "EfficientNetB1_finetuned"
+    extractor = EfficientNetB1Extractor(weights_path=str(efficientnet_weights))
 
     results = []
 
@@ -135,12 +87,11 @@ def extract_finetuned_features(  # noqa: C901
         feature_data = {"id": image_id, "features": {}}
 
         try:
-            for extractor_name, extractor in extractors:
-                features = extractor.extract(image)
-                feature_data["features"][extractor_name] = {
-                    "vector": features.tolist(),
-                    "dimension": len(features),
-                }
+            features = extractor.extract(image)
+            feature_data["features"][extractor_name] = {
+                "vector": features.tolist(),
+                "dimension": len(features),
+            }
 
             results.append(feature_data)
 
@@ -170,10 +121,15 @@ def extract_finetuned_features(  # noqa: C901
     return results
 
 
-def main():
+def main(fold_index: Optional[int] = None):
     """Main function to extract fine-tuned features."""
     # Output path for fine-tuned features
-    output_path = SEGMENTED_IMAGE_DIR.parent / "finetuned_dl_features.json"
+    if fold_index is None:
+        output_path = SEGMENTED_IMAGE_DIR.parent / "finetuned_dl_features.json"
+    else:
+        output_path = (
+            SEGMENTED_IMAGE_DIR.parent / f"finetuned_dl_features_fold{fold_index}.json"
+        )
 
     print("=" * 60)
     print("Fine-Tuned Deep Learning Feature Extraction")
@@ -182,6 +138,7 @@ def main():
     print(f"Metadata: {SEGMENTED_METADATA_PATH}")
     print(f"Weights directory: {WEIGHTS_DIR}")
     print(f"Output: {output_path}")
+    print(f"Fold index: {fold_index if fold_index is not None else 'default'}")
     print("=" * 60 + "\n")
 
     extract_finetuned_features(
@@ -189,6 +146,7 @@ def main():
         metadata_path=SEGMENTED_METADATA_PATH,
         weights_dir=WEIGHTS_DIR,
         output_json_path=output_path,
+        fold_index=fold_index,
     )
 
 

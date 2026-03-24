@@ -6,6 +6,7 @@ This script creates a new collection with all vectors (old + new fine-tuned).
 import json
 import sys
 from pathlib import Path
+from typing import Optional
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
@@ -176,12 +177,16 @@ def upload_combined_features_to_new_collection(  # noqa: C901
     print(f"{'='*60}")
 
 
-def main():
+def main(fold_index: Optional[int] = None):
     """Main function to upload fine-tuned features."""
     # Paths
     old_features_path = Path(FEATURES_JSON_PATH)
-    finetuned_path = Path("Dataset/finetuned_dl_features.json")
-    new_collection_name = f"{COLLECTION_NAME}_finetuned"
+    if fold_index is None:
+        finetuned_path = Path("Dataset/finetuned_dl_features.json")
+        new_collection_name = f"{COLLECTION_NAME}_finetuned"
+    else:
+        finetuned_path = Path(f"Dataset/finetuned_dl_features_fold{fold_index}.json")
+        new_collection_name = f"{COLLECTION_NAME}_finetuned_fold{fold_index}"
 
     if not old_features_path.exists():
         print(f"Error: Old features not found at {old_features_path}")
@@ -200,6 +205,7 @@ def main():
     print("=" * 60)
     print(f"Qdrant URL: {QDRANT_URL}")
     print(f"New Collection: {new_collection_name}")
+    print(f"Fold index: {fold_index if fold_index is not None else 'default'}")
     print(f"Old features: {old_features_path}")
     print(f"Fine-tuned features: {finetuned_path}")
     print("=" * 60 + "\n")

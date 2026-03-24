@@ -1,196 +1,298 @@
 # Myco Fungi Feature Extraction and Classification
 
-This project experiments with different feature extractor methods for classifying myco fungi species from images using Computer Vision, Deep Learning (PyTorch), and Qdrant Vector Database.
+This project experiments with multiple feature extractor methods for classifying **Penicillium** fungi species from colony images using Computer Vision, Deep Learning (PyTorch), and Qdrant as the vector database. Species identification uses k-nearest-neighbour retrieval over named Qdrant vector collections with configurable aggregation and environment strategies.
+
+## Species Covered
+
+5 *Penicillium* species, each with 4–7 strains grown across 7 growth media (environments):
+
+| Species | Example strain |
+|---|---|
+| *P. aurantiogriseum* | DTO 001-A1 |
+| *P. cyclopium* | DTO 002-A1 |
+| *P. freii* | DTO 003-A1 |
+| *P. melanoconidium* | DTO 004-A1 |
+| *P. viridicatum* | DTO 005-A1 |
+
+Growth media (environments): `MEA`, `DG18`, `CREA`, `CYA`, `CYA30`, `CYAS`, `YES`
 
 ## Prerequisites
 
 - Python 3.13+
-- [uv](https://github.com/astral-sh/uv) (for dependency management)
+- [uv](https://github.com/astral-sh/uv) package manager
 - Docker & Docker Compose (for Qdrant vector database)
-- Nix (optional, for reproducible environment)
+- Nix (optional, for reproducible shell environment)
 
 ## 1. Environment Setup
 
-This project uses `uv` for fast package management.
-
 ```bash
-# Install dependencies
+# Clone the repo, then install dependencies
 uv sync
 
-# Activate virtual environment (optional, uv run handles this automatically)
+# Activate virtual environment (uv run works without this,
+# but activate if running scripts directly)
 source .venv/bin/activate
 ```
 
-## 2. Setup Qdrant Vector Database
+Using Nix:
+```bash
+nix-shell -r "zsh"   # or bash
+source .venv/bin/activate
+```
 
-### Option A: Using Docker Compose (Recommended)
+## 2. Dataset Download
+
+Download the original dataset from Google Drive and place it at `Dataset/original/`:
+
+**Dataset**: [Google Drive – fungal images](https://drive.google.com/drive/folders/1onJ4404wG65BbdrM9PBvESjfx68N2fs1?usp=sharing)
+
+Expected structure after download:
+```
+Dataset/original/
+├── DTO 001-A1 Penicillium aurantiogriseum/
+│   ├── MEA/
+│   │   ├── DTO001A1-MEA-ob.jpg
+│   │   └── DTO001A1-MEA-rev.jpg
+│   └── ...
+└── DTO 002-A1 Penicillium cyclopium/
+    └── ...
+```
+
+## 3. Setup Qdrant Vector Database
 
 ```bash
-# Start Qdrant service
+# Start Qdrant (required before extract / evaluate / predict)
 docker compose up -d
 
-# Check status
+# Verify it is running
 docker compose ps
 
-# View logs
-docker compose logs -f qdrant
-
-# Stop service
+# Qdrant dashboard: http://localhost:6333/dashboard
+# Stop when done
 docker compose down
 ```
 
-### Option B: Using Docker directly
+## 4. Full Pipeline
 
-```bash
-# Pull and run Qdrant
-docker run -d -p 6333:6333 -p 6334:6334 \
-    -v $(pwd)/qdrant_storage:/qdrant/storage:z \
-    qdrant/qdrant
-```
+All steps are orchestrated via `src/main.py`.  Run in order for a fresh setup.
 
-Qdrant will be available at `http://localhost:6333`.
+### Step 1 — Reformat Dataset
 
-## 3. Usage Pipeline
-
-All pipeline steps are orchestrated via `src/main.py`. Use `uv run` to execute commands.
-
-### Step 1: Reformat Dataset
-
-Preprocesses raw images, segments fungi colonies using K-means clustering, and generates metadata.
+Preprocesses raw images (Petri dish crop), runs K-means segmentation to isolate colonies, and generates metadata JSON files.
 
 ```bash
 uv run python src/main.py reformat
 ```
 
-**Output:**
-- `Dataset/full_image/`
-- `Dataset/segmented_image/`
-- `Dataset/segmented_image_metadata.json`
-
-### Step 1.1: Reformat Hierarchical (Optional)
-
-Reformats the dataset into a hierarchical structure `{species}/{strain}/{environment}/` for easier manual inspection or standard image classification loaders.
-
-```bash
-uv run python src/main.py reformat-hierarchical
+Output:
+```
+Dataset/full_image/                      ← copied & preprocessed originals
+Dataset/segmented_image/                 ← cropped colony segments (256×256)
+Dataset/full_image_metadata.json         ← id, strain, environment, angle, species
+Dataset/segmented_image_metadata.json    ← + parent_id, segment_index, bbox
 ```
 
-**Output:**
-- `Dataset/hierarchical/`
+Latest run output (Mar 17, 2026):
+```
+Running dataset reformatting...
+...
+Processing complete!
+Full images: 435
+Segmented images: 1305
+Dataset reformatting complete.
+```
 
-### Step 2: Generate Strain Mapping
+### Step 2 — Generate Strain Mapping
 
-Generates a clean `strain_to_specy.csv` based on available data and creates a train/test split (one strain per species reserved for testing).
+Scans the original dataset folders to build `strain_to_specy.csv`. Marks **one strain per species** as the hold-out test strain (second alphabetical strain if ≥2 exist).
 
 ```bash
 uv run python src/main.py generate-mapping
 ```
 
-**Output:**
-- `Dataset/strain_to_specy.csv`
+Output:
+```
+Dataset/strain_to_specy.csv    ← columns: Strain, Species, Test
+```
 
-### Step 3: Feature Extraction & Upload
+Example output:
+```
+Generating strain mapping...
+Scanning Dataset/original for strain-species mapping...
+Found 31 strains from folder names.
+Saved generated mapping to Dataset/strain_to_specy.csv
+Total Strains: 31
+Test Strains: 7
+```
 
-Extracts features (ResNet50, MobileNetV2, EfficientNetB1, HOG, Gabor, Color Histograms) and uploads them to Qdrant.
+### Step 3 — Feature Extraction (Standard)
+
+Extracts 7 feature types per segment and uploads them to Qdrant.
 
 ```bash
 uv run python src/main.py extract
 ```
 
-**Output:**
-- `Dataset/segmented_features.json`
-- Qdrant Collection: `myco_fungi_features_full`
+Output:
+```
+Dataset/segmented_features.json     ← feature vectors for all segments
+Qdrant collection: myco_fungi_features_full
+```
 
-### Step 4: Train Models (Optional)
+Feature types and vector dimensions:
 
-Fine-tunes PyTorch models (ResNet50, MobileNetV2, EfficientNetB1) on the training set.
+| Extractor key | Type | Dimension |
+|---|---|---|
+| `hog` | Hand-crafted | ~2880 |
+| `gabor` | Hand-crafted | 32 |
+| `colorhistogram` | Hand-crafted | 96 |
+| `colorhistogramhs` | Hand-crafted | 64 |
+| `resnet50` | DL (ImageNet) | 2048 |
+| `mobilenetv2` | DL (ImageNet) | 1280 |
+| `efficientnetb1` | DL (ImageNet) | 1280 |
+
+### Step 4 — Fine-tuned Model Weights (Optional)
+
+Download the fine-tuned model weights from Google Drive:
+
+**Weights**: [Google Drive – finetuned weights](https://drive.google.com/drive/folders/1QvmnfLz40vpr20eJoejeXw5Sc-aM47kG?usp=sharing)
+
+Place `.pth` files into the `weights/` directory:
+```
+weights/
+├── EfficientNetB1_finetuned.pth
+├── MobileNetV2_finetuned.pth
+├── ResNet50_finetuned.pth
+└── EfficientNetB1_triplet.pth
+```
+
+These models were trained on the fungi dataset using `colab/train_models.py`.
+
+**4a. Extract fine-tuned features:**
+```bash
+uv run python src/main.py extract-finetuned
+```
+Output: `Dataset/finetuned_dl_features.json`
+
+**4b. Upload combined features (standard + fine-tuned) to Qdrant:**
+```bash
+uv run python src/main.py upload-finetuned
+```
+Output: Qdrant collection `myco_fungi_features_full_finetuned`
+
+Fine-tuned extractors:
+
+| Extractor key | Weights file | Dimension |
+|---|---|---|
+| `ResNet50_finetuned` | `ResNet50_finetuned.pth` | 2048 |
+| `MobileNetV2_finetuned` | `MobileNetV2_finetuned.pth` | 1280 |
+| `EfficientNetB1_finetuned` | `EfficientNetB1_finetuned.pth` | 1280 |
+| `EfficientNetB1_triplet` | `EfficientNetB1_triplet.pth` | 1280 |
+
+### Step 5 — Train Models
+
+Fine-tunes ResNet50, MobileNetV2, and EfficientNetB1 on the training split (locally, no GPU required but recommended).  For GPU/TPU cloud training see `colab/train_models.py`.
 
 ```bash
 uv run python src/main.py train
 ```
 
-**Output:**
-- `weights/*.pth` (Trained models)
-- `weights/*_history.json` (Training logs)
-
-### Step 5: Evaluation
-
-Evaluates the models on the test set (unseen strains).
-
-**Evaluate with a single extractor:**
-```bash
-uv run python src/main.py evaluate --extractor resnet50 --k 5
+Output:
+```
+weights/ResNet50_finetuned.pth
+weights/MobileNetV2_finetuned.pth
+weights/EfficientNetB1_finetuned.pth
+weights/*_history.json     ← training curves
 ```
 
-**Evaluate with ALL extractors:**
+### Step 6 — Evaluation
+
+Evaluates on the test strains (held-out one strain per species).
+
+**Terminology**
+
+| Term | Meaning |
+|---|---|
+| Strategy | How neighbor votes are aggregated: `weighted` (score-weighted) or `uni` (uniform count) |
+| E1 (same env) | Query images use only neighbors from the **same** growth medium |
+| E2 (all env) | Query images use neighbors from **all** growth media |
+| E3\_`<env>` | Use only query images from a specific medium |
+| E4\_`<env>` | Exclude one specific medium from the candidate pool |
+
+**Single extractor, specific strategy:**
 ```bash
-uv run python src/main.py evaluate --extractor all --k 5
+uv run python src/main.py evaluate \
+    --extractor efficientnetb1_finetuned \
+    --k 5 \
+    --strategy weighted \
+    --environment all \
+    --collection myco_fungi_features_full_finetuned
 ```
 
-Available extractors: `resnet50`, `mobilenetv2`, `efficientnetb1`, `hog`, `gabor`, `colorhistogram`, `colorhistogramhs`, `all`
+**All extractors sweep:**
+```bash
+uv run python src/main.py evaluate --extractor all --k 7
+```
 
-**Output:**
-- `results/prediction_report_*.txt`
-- `results/confusion_matrix.png`
-- `results/eval_{extractor}/` (when using `--extractor all`)
+**Full brute-force sweep (all extractors × all envs × all strategies):**
+```bash
+uv run python src/main.py evaluate-all --k 7 \
+    --collection myco_fungi_features_full_finetuned
+```
 
-### Step 6: Prediction
+Available `--extractor` values:
+`resnet50`, `resnet50_finetuned`, `mobilenetv2`, `mobilenetv2_finetuned`, `efficientnetb1`, `efficientnetb1_finetuned`, `efficientnetb1_triplet`, `hog`, `gabor`, `colorhistogram`, `colorhistogramhs`, `all`, `all-finetuned`
 
-#### 6.1 Predict for Known Strain
+Output per run (saved to `results/run_<timestamp>_k<K>/`):
+- `prediction_report_*.txt`
+- `evaluation_results.json`
+- `confusion_matrix.png`
+- `<extractor>_<strategy>_<env>.csv`
 
-Predict species for a specific strain using vector similarity search.
+### Step 7 — 5-Fold Cross-Validation
 
+Runs strain-level cross-validation: all strains rotate as test across 5 folds. Sweeps E1/E2 × weighted/uni × K∈{3,5,7,9,11} — **100 runs total**. Results append to CSV so the job is resumable.
+
+```bash
+uv run python src/main.py cross-validate \
+    --collection myco_fungi_features_full_finetuned
+```
+
+Output:
+```
+report/week_1_2/cv_results.csv          ← per-prediction rows (fold, env, strategy, K)
+report/week_1_2/cv_summary_table.csv    ← mean/std accuracy per (env, strategy, K)
+```
+
+**Generate visualizations after the run:**
+```bash
+uv run python src/main.py cross-validate-visualize
+```
+
+Output images (`report/week_1_2/images/`):
+- `accuracy_vs_k.png` — accuracy vs K for all 4 setting combinations
+- `fold_variance.png` — box plot of fold variance at each K
+- `heatmap_env_strategy_k.png` — heatmap (env×strategy) vs K
+- `env_comparison.png` — E1 vs E2 bar chart per strategy
+
+### Step 8 — Prediction
+
+**Known strain (already in Qdrant):**
 ```bash
 uv run python src/main.py predict --strain "DTO 123-A1" --extractor resnet50 --k 5
 ```
 
-#### 6.2 Predict for New Unseen Strain
-
-Predict species for a completely new strain from raw images (not in the database).
-
-**Directory structure required:**
-```
-new_strain_folder/
-├── environment1/
-│   ├── image1.jpg
-│   └── image2.jpg
-└── environment2/
-    ├── image1.jpg
-    └── image2.jpg
-```
-
-**Command:**
+**New unseen strain (raw images):**
 ```bash
+# Directory: new_strain/MEA/*.jpg, new_strain/CYA/*.jpg ...
 uv run python src/main.py predict-new \
-    --path /path/to/strain_folder \
-    --extractor resnet50 \
+    --path /path/to/new_strain \
+    --extractor efficientnetb1_finetuned \
     --k 7 \
     --strategy avg
 ```
 
-**Options:**
-- `--path`: Path to strain folder (required)
-- `--extractor`: Feature extractor (default: `resnet50`)
-  - Options: `resnet50`, `mobilenetv2`, `efficientnetb1`, `hog`, `gabor`, `colorhistogram`, `colorhistogramhs`
-- `--k`: Number of nearest neighbors (default: 7)
-- `--strategy`: Aggregation strategy (default: `avg`)
-  - `avg`: Weighted by similarity scores
-  - `uni`: Uniform weight (count-based)
-
-**Output:**
-- `results/predict_new_{strain_name}_{timestamp}/`
-  - `prediction_results.json` - Full prediction results with rankings
-  - `prediction_visualization.jpg` - Visual prediction display
-
-**What it does:**
-1. Reads raw images from `strain_folder/environment_name/*.jpg`
-2. Applies Petri dish preprocessing and K-means segmentation
-3. Extracts features from each segment using selected extractor
-4. Searches Qdrant for nearest neighbors
-5. Aggregates predictions across all segments
-6. Outputs species ranking and visualization
-
-### Step 7: Generate Comprehensive Report
+### Step 9 — Comprehensive Report
 
 ```bash
 uv run python src/main.py report \
@@ -205,24 +307,59 @@ uv run python src/main.py report \
 
 ```
 .
-├── pyproject.toml                     # Project dependencies
-├── docker-compose.yml                 # Qdrant service configuration
+├── pyproject.toml                         # Project metadata & dependencies
+├── requirements.txt                       # Pip-compatible requirements
+├── docker-compose.yml                     # Qdrant service
+├── species_weights.json                   # Per-species manual ensemble weights
+├── colab/                                 # Google Colab training notebooks
+│   ├── train_models.py                    # Fine-tune ResNet50/MobileNetV2/EfficientNetB1
+│   ├── train_models_triplet_loss.py       # Triplet loss training for EfficientNetB1
+│   ├── train_models_selfsupervised.py     # Self-supervised pre-training
+│   └── train_models_cellvit.py            # CellViT-based ViT training
 ├── src/
-│   ├── main.py                        # CLI Entry point
-│   ├── config.py                      # Centralized configuration
-│   ├── classification/                # Prediction & Evaluation logic
-│   │   └── visualization/             # Visualization utilities
-│   ├── database/                      # Qdrant interaction
-│   ├── feature_extraction/            # Feature extractors (PyTorch & Traditional)
-│   ├── preprocessing/                 # Image processing & Segmentation
-│   │   ├── preprocess.py              # Petri dish preprocessing
-│   │   └── kmeans.py                  # K-means segmentation
-│   ├── training/                      # PyTorch training loop
-│   ├── utils/                         # Helper utilities
-│   └── scripts/                       # Standalone scripts
-├── Dataset/                           # Data directory (ignored by git)
-├── qdrant_storage/                    # Qdrant persistent storage
-└── README.md                          # Documentation
+│   ├── main.py                            # CLI entry point (all subcommands)
+│   ├── config.py                          # Centralized paths & constants
+│   ├── classification/
+│   │   ├── evaluate_species.py            # Evaluation loop & CSV output
+│   │   ├── prediction.py                  # Core KNN prediction logic
+│   │   └── visualization/
+│   ├── database/
+│   │   ├── upload_qdrant.py               # Feature upload to Qdrant
+│   │   └── query_utils.py                 # Similarity search helpers
+│   ├── feature_extraction/
+│   │   ├── feature_extractors.py          # All extractor classes
+│   │   └── generate_features.py           # Batch feature extraction
+│   ├── preprocessing/
+│   │   ├── preprocess.py                  # Petri dish crop
+│   │   └── kmeans.py                      # K-means colony segmentation
+│   ├── training/
+│   │   └── train_models.py                # Local PyTorch training loop
+│   ├── utils/
+│   │   └── dataset_utils.py               # Strain/species mapping helpers
+│   └── scripts/
+│       ├── reformat_dataset.py            # Step 1: dataset reformatting
+│       ├── generate_strain_mapping.py     # Step 2: CSV mapping generation
+│       ├── extract_finetuned_features.py  # Feature extraction (fine-tuned)
+│       ├── upload_finetuned_features.py   # Upload to finetuned collection
+│       ├── cross_validation.py            # 5-fold CV runner
+│       └── cv_visualize.py                # CV result visualizations
+├── report/
+│   ├── week_1_2/                          # Phase 3 & 4 outputs
+│   │   ├── cv_results.csv
+│   │   ├── cv_summary_table.csv
+│   │   ├── images/                        # Visualization exports
+│   │   └── REPORT.md
+│   └── final_gr2/                         # Final group report
+├── Dataset/                               # Data directory (git-ignored)
+│   ├── original/                          ← place downloaded dataset here
+│   ├── full_image/
+│   ├── segmented_image/
+│   └── strain_to_specy.csv
+└── weights/                               # Model weight files (git-ignored)
+    ├── EfficientNetB1_finetuned.pth
+    ├── MobileNetV2_finetuned.pth
+    ├── ResNet50_finetuned.pth
+    └── EfficientNetB1_triplet.pth
 ```
 
 ## Quick Command Reference
@@ -230,19 +367,23 @@ uv run python src/main.py report \
 | Command | Description |
 |---------|-------------|
 | `docker compose up -d` | Start Qdrant database |
-| `docker compose down` | Stop Qdrant database |
 | `uv run python src/main.py reformat` | Preprocess and segment images |
-| `uv run python src/main.py generate-mapping` | Create train/test split |
-| `uv run python src/main.py extract` | Extract features and upload to Qdrant |
-| `uv run python src/main.py train` | Fine-tune deep learning models |
-| `uv run python src/main.py evaluate --extractor all` | Evaluate all extractors |
+| `uv run python src/main.py generate-mapping` | Create train/test split CSV |
+| `uv run python src/main.py extract` | Extract standard features → Qdrant |
+| `uv run python src/main.py extract-finetuned` | Extract finetuned DL features |
+| `uv run python src/main.py upload-finetuned` | Upload finetuned collection to Qdrant |
+| `uv run python src/main.py train` | Fine-tune DL models locally |
+| `uv run python src/main.py evaluate --extractor efficientnetb1_finetuned --k 5` | Single-setting evaluation |
+| `uv run python src/main.py evaluate-all --k 7` | Full brute-force sweep |
+| `uv run python src/main.py cross-validate` | 5-fold CV (100 runs) |
+| `uv run python src/main.py cross-validate-visualize` | Generate CV visualizations |
 | `uv run python src/main.py predict --strain "X"` | Predict known strain |
 | `uv run python src/main.py predict-new --path /path` | Predict new unseen strain |
 
 ## Notes
 
-- **Configuration**: Paths and constants are defined in `src/config.py`.
-- **Dependencies**: Managed via `pyproject.toml`. Use `uv add <package>` to add new ones.
-- **Qdrant**: Ensure Qdrant is running before uploading or querying.
-- **Data Persistence**: Qdrant data is stored in `./qdrant_storage/` and persists across container restarts.
-- **New Strain Prediction**: Automatically applies preprocessing and segmentation to raw images before feature extraction.
+- All paths and constants are defined in `src/config.py`.
+- Qdrant must be running before `extract`, `upload-finetuned`, `evaluate`, `predict`, or `cross-validate`.
+- Qdrant data persists in `./qdrant_storage/` across container restarts.
+- Cross-validation results append to CSV after each combination, so interrupted runs can be resumed safely.
+- The `--collection` flag on evaluate/evaluate-all/cross-validate selects between the base collection (`myco_fungi_features_full`) and the finetuned collection (`myco_fungi_features_full_finetuned`).

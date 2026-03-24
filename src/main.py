@@ -41,6 +41,14 @@ def run_generate_mapping(args):
     print("Strain mapping generation complete.")
 
 
+def run_generate_cv_fold_mappings(args):
+    print("Generating fold-specific strain mapping CSV files...")
+    from src.scripts.generate_cv_fold_mappings import generate_fold_mapping_files
+
+    generated = generate_fold_mapping_files(n_folds=args.n_folds)
+    print(f"Generated {len(generated)} fold mapping files.")
+
+
 def run_extract(args):
     print("Running feature extraction...")
     from src.feature_extraction.generate_features import generate_features
@@ -722,7 +730,7 @@ def run_extract_finetuned(args):
     print("Extracting features with fine-tuned models...")
     from src.scripts.extract_finetuned_features import main as extract_finetuned_main
 
-    extract_finetuned_main()
+    extract_finetuned_main(fold_index=args.fold)
     print("Fine-tuned feature extraction complete.")
 
 
@@ -731,7 +739,7 @@ def run_upload_finetuned(args):
     print("Uploading fine-tuned features to Qdrant...")
     from src.scripts.upload_finetuned_features import main as upload_finetuned_main
 
-    upload_finetuned_main()
+    upload_finetuned_main(fold_index=args.fold)
     print("Fine-tuned feature upload complete.")
 
 
@@ -757,6 +765,31 @@ def run_upload_vit(args):
         collection_name=args.collection,
     )
     print("ViT feature upload complete.")
+
+def run_cross_validate(args):
+    """Run 5-fold strain-level cross-validation."""
+    print("Running 5-fold cross-validation...")
+    from src.scripts.cross_validation import run_cross_validation
+
+    collection = getattr(args, "collection", None)
+    extractor = getattr(args, "extractor", "efficientnetb1_finetuned")
+    run_cross_validation(
+        collection_name=collection,
+        extractor_key=extractor,
+        use_fold_specific_assets=args.use_fold_specific_assets,
+        collection_template=args.collection_template,
+        weights_dir=args.weights_dir,
+    )
+    print("Cross-validation complete.")
+
+
+def run_cross_validate_visualize(args):
+    """Generate visualizations from cross-validation results."""
+    print("Generating cross-validation visualizations...")
+    from src.scripts.cv_visualize import run_visualizations
+
+    run_visualizations()
+    print("Visualization generation complete.")
 
 
 def run_report(args):
@@ -823,6 +856,18 @@ def main():
         help="Generate strain to species mapping with test split",
     )
     parser_mapping.set_defaults(func=run_generate_mapping)
+
+    parser_cv_mapping = subparsers.add_parser(
+        "generate-cv-fold-mappings",
+        help="Generate fold-specific mapping CSV files with Test split per fold",
+    )
+    parser_cv_mapping.add_argument(
+        "--n-folds",
+        type=int,
+        default=5,
+        help="Number of folds to generate (default: 5)",
+    )
+    parser_cv_mapping.set_defaults(func=run_generate_cv_fold_mappings)
 
     # Extract (and Upload)
     parser_extract = subparsers.add_parser(
@@ -964,12 +1009,24 @@ def main():
         "extract-finetuned",
         help="Extract features using fine-tuned deep learning models",
     )
+    parser_extract_ft.add_argument(
+        "--fold",
+        type=int,
+        default=None,
+        help="Fold index for fold-specific weight and output naming",
+    )
     parser_extract_ft.set_defaults(func=run_extract_finetuned)
 
     # Upload Fine-tuned
     parser_upload_ft = subparsers.add_parser(
         "upload-finetuned",
         help="Upload fine-tuned features to existing Qdrant collection",
+    )
+    parser_upload_ft.add_argument(
+        "--fold",
+        type=int,
+        default=None,
+        help="Fold index for fold-specific feature file and collection naming",
     )
     parser_upload_ft.set_defaults(func=run_upload_finetuned)
 
@@ -1018,6 +1075,49 @@ def main():
         help="Name of the Qdrant collection",
     )
     parser_upload_vit.set_defaults(func=run_upload_vit)
+
+    # Cross-Validate
+    parser_cv = subparsers.add_parser(
+        "cross-validate",
+        help="Run 5-fold strain-level cross-validation (E1/E2 × uni/avg × K∈{3,5,7,9,11})",
+    )
+    parser_cv.add_argument(
+        "--collection",
+        type=str,
+        default=None,
+        help="Qdrant collection name (default: from config; use 'myco_fungi_features_full_finetuned' for finetuned)",
+    )
+    parser_cv.add_argument(
+        "--extractor",
+        type=str,
+        default="efficientnetb1_finetuned",
+        help="Extractor key to use (default: efficientnetb1_finetuned)",
+    )
+    parser_cv.add_argument(
+        "--use-fold-specific-assets",
+        action="store_true",
+        help="Use fold-specific EfficientNetB1 weights and fold-specific collections",
+    )
+    parser_cv.add_argument(
+        "--collection-template",
+        type=str,
+        default=None,
+        help="Optional collection template, e.g. 'my_collection_fold{fold}'",
+    )
+    parser_cv.add_argument(
+        "--weights-dir",
+        type=str,
+        default="weights",
+        help="Directory containing fold-specific weights",
+    )
+    parser_cv.set_defaults(func=run_cross_validate)
+
+    # Cross-Validate Visualize
+    parser_cv_viz = subparsers.add_parser(
+        "cross-validate-visualize",
+        help="Generate visualizations from cross-validation results (reads report/week_1_2/cv_results.csv)",
+    )
+    parser_cv_viz.set_defaults(func=run_cross_validate_visualize)
 
     args = parser.parse_args()
 

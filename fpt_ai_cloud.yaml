@@ -1,0 +1,44 @@
+name: fungal
+
+gpu_instance: 1xH100
+
+image_setting:
+  template_name: Ubuntu 24.04
+
+access_container:
+  tcp_ports:
+    - 22
+  ssh_keys:
+    - name: window
+      key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFeY6n5KNmRzW6ZnWmxWLODvHVxYmCLIwhtj54MpCeCk azuread\datpham@WIN-JND9548E8P5
+    - name: archwsl
+      key: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIM5mCVPQZy0YoufKEzoNj7nx8j7x+xZAnjyRu9vZKRnU dat@WIN-JND9548E8P5
+
+advanced_settings:
+  persistent_disk:
+    mount_capacity: 80
+    mount_path: /workspace
+  startup_commands:
+    cmd:
+      - bash
+      - -lc
+      - |
+        set -eux
+        export DEBIAN_FRONTEND=noninteractive
+
+        apt-get update
+        apt-get install -y --no-install-recommends \
+          ca-certificates curl git unzip \
+          build-essential pkg-config \
+          python3 python3-venv python3-pip \
+          libgl1 libglib2.0-0 \
+          docker.io docker-compose-v2
+
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        export PATH="$HOME/.local/bin:$PATH"
+
+        # Start Docker daemon if needed (depends on cloud runtime privileges)
+        service docker start || true
+
+        # Start SSH daemon last so setup above completes
+        exec /usr/sbin/sshd -D -e
