@@ -11,22 +11,30 @@ Total runs     : 5 folds × 2 env × 2 agg × 5 K = 100
 Results are appended to ``report/week_1_2/cv_results.csv`` immediately after
 each run, so the job is safe to interrupt and resume — already-completed
 (fold, env_strategy, agg_strategy, k) combinations are skipped automatically.
+
+Parallel execution: within each fold, all (env × agg × k) combos run concurrently
+using ThreadPoolExecutor. Progress is displayed via tqdm.
 """
 
 from __future__ import annotations
 
 import csv
+import threading
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import pandas as pd
 from qdrant_client import QdrantClient
+from tqdm import tqdm
 
 from src.config import (
     COLLECTION_NAME,
+    QDRANT_API_KEY,
     QDRANT_URL,
     RESULTS_DIR,
+    SEGMENTED_IMAGE_DIR,
     STRAIN_SPECIES_MAPPING_PATH,
 )
 
@@ -58,6 +66,9 @@ K_VALUES = [3, 5, 7, 9, 11]
 ENV_STRATEGIES: List[Optional[str]] = [None, "all"]  # E1, E2
 AGG_STRATEGIES = ["uni", "avg"]  # uni = uniform, avg = score-weighted
 
+# Thread-safe CSV write lock
+_csv_lock = threading.Lock()
+
 
 # ---------------------------------------------------------------------------
 # Fold generation
@@ -74,8 +85,8 @@ def generate_cv_folds(
     The strains for each species are sorted alphabetically and assigned to
     folds via round-robin (``strain[fold_idx % len(strains)]``).
     Species that have fewer strains than *n_folds* will repeat earlier strains
-    in later folds — this matches the task specification ("fold 5 reuses fold
-    1's test strain for 4-strain species").
+    in later folds — this matches the task specification (\"fold 5 reuses fold
+    1's test strain for 4-strain species\").
     """
     if not csv_path.exists():
         raise FileNotFoundError(
@@ -130,12 +141,98 @@ def _load_completed_runs(csv_path: Path) -> set:
 def _append_rows(csv_path: Path, rows: List[dict]) -> None:
     if not rows:
         return
-    write_header = not csv_path.exists()
-    with open(csv_path, "a", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=CV_RESULTS_FIELDS)
-        if write_header:
-            writer.writeheader()
-        writer.writerows(rows)
+    with _csv_lock:
+        write_header = not csv_path.exists()
+        with open(csv_path, "a", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=CV_RESULTS_FIELDS)
+            if write_header:
+                writer.writeheader()
+            writer.writerows(rows)
+
+
+# ---------------------------------------------------------------------------
+# Single-combo worker
+# ---------------------------------------------------------------------------
+
+
+def _run_fold_combo(
+    fold_idx: int,
+    fold_strains: Dict[str, str],
+    env_val: Optional[str],
+    agg: str,
+    k: int,
+    extractor: Any,
+    extractor_id: str,
+    coll: str,
+    run_output_dir: Path,
+    segmented_image_dir: str,
+) -> Tuple[tuple, List[dict], float, str, str, int]:
+    """
+    Execute one (env, agg, k) combination for a fold.
+
+    Each call creates its own QdrantClient to avoid connection sharing across
+    threads. The feature extractor is shared (PyTorch inference in eval mode
+    is thread-safe under torch.no_grad).
+
+    Returns (key, rows, accuracy, env_label, agg, k).
+    """
+    from src.classification.evaluate_species import run_species_evaluation
+    from src.classification.visualization.visualize_prediction import (
+        batch_visualize_predictions,
+    )
+
+    env_label = "E1" if env_val is None else "E2"
+    key = (fold_idx, env_label, agg, k, extractor_id, coll)
+
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=120)
+
+    fold_out = run_output_dir / f"fold{fold_idx}_{env_label}_{agg}_k{k}"
+    fold_out.mkdir(parents=True, exist_ok=True)
+
+    results, _ = run_species_evaluation(
+        client=client,
+        collection_name=coll,
+        feature_extractor=extractor,
+        k=k,
+        without_siblings=True,
+        environment=env_val,
+        strategy=agg,
+        output_dir=str(fold_out),
+        generate_visualizations=False,
+        selected_strains=fold_strains,
+    )
+
+    # Generate visualizations for ALL cases (correct + incorrect)
+    if results:
+        viz_dir = str(fold_out / "visualizations")
+        batch_visualize_predictions(
+            prediction_results=results,
+            segmented_image_dir=segmented_image_dir,
+            output_dir=viz_dir,
+            k=k,
+            filter_correct=None,  # all cases
+        )
+
+    rows = [
+        {
+            "fold": fold_idx,
+            "species": res.get("ground_truth", ""),
+            "strain": res.get("strain", ""),
+            "ground_truth": res.get("ground_truth", ""),
+            "predicted_specy": res.get("predicted_specy", ""),
+            "correct": int(bool(res.get("correct"))),
+            "test_set_index": res.get("test_set_index", 0),
+            "env_strategy": env_label,
+            "agg_strategy": agg,
+            "k": k,
+            "extractor": extractor_id,
+            "collection": coll,
+        }
+        for res in results
+    ]
+
+    acc = sum(r.get("correct", False) for r in results) / len(results) if results else 0.0
+    return key, rows, acc, env_label, agg, k
 
 
 # ---------------------------------------------------------------------------
@@ -154,16 +251,16 @@ def run_cross_validation(
     env_strategies: List[Optional[str]] = ENV_STRATEGIES,
     agg_strategies: List[str] = AGG_STRATEGIES,
     output_dir: Optional[Path] = None,
+    max_workers: int = 4,
 ) -> None:
-    from src.classification.evaluate_species import run_species_evaluation
     from src.feature_extraction.feature_extractors import (
-        EfficientNetB1FinetunedExtractor,
         EfficientNetB1Extractor,
+        EfficientNetB1FinetunedExtractor,
         EfficientNetB1TripletExtractor,
-        ResNet50FinetunedExtractor,
+        MobileNetV2Extractor,
         MobileNetV2FinetunedExtractor,
         ResNet50Extractor,
-        MobileNetV2Extractor,
+        ResNet50FinetunedExtractor,
     )
 
     _extractor_map = {
@@ -182,8 +279,6 @@ def run_cross_validation(
             f"Choose from: {list(_extractor_map.keys())}"
         )
 
-    client = QdrantClient(url=QDRANT_URL)
-
     REPORT_DIR.mkdir(parents=True, exist_ok=True)
     run_output_dir = output_dir or (RESULTS_DIR / "cross_validation")
     run_output_dir.mkdir(parents=True, exist_ok=True)
@@ -192,110 +287,106 @@ def run_cross_validation(
     completed = _load_completed_runs(CV_RESULTS_CSV)
 
     total = n_folds * len(env_strategies) * len(agg_strategies) * len(k_values)
-    run_num = 0
+    segmented_image_dir = str(SEGMENTED_IMAGE_DIR)
 
-    for fold_idx, fold_strains in enumerate(folds):
-        if use_fold_specific_assets and extractor_key == "efficientnetb1_finetuned":
-            fold_weight_path = Path(weights_dir) / f"fold{fold_idx}_EfficientNetB1_finetuned.pth"
-            if not fold_weight_path.exists():
-                raise FileNotFoundError(
-                    f"Missing fold-specific weight: {fold_weight_path}. "
-                    "Copy fold weights from Drive before running CV."
+    print(f"Cross-validation: {total} total runs, max_workers={max_workers}")
+    print(f"Results → {CV_RESULTS_CSV}")
+
+    with tqdm(total=total, desc="CV runs", unit="run", dynamic_ncols=True) as pbar:
+        for fold_idx, fold_strains in enumerate(folds):
+            # ---- build extractor for this fold ----
+            if use_fold_specific_assets and extractor_key == "efficientnetb1_finetuned":
+                fold_weight_path = (
+                    Path(weights_dir) / f"fold{fold_idx}_EfficientNetB1_finetuned.pth"
                 )
-            extractor = _extractor_map[extractor_key](weights_path=str(fold_weight_path))
-            extractor_id = f"{extractor_key}_fold{fold_idx}"
-        else:
-            extractor = _extractor_map[extractor_key]()
-            extractor_id = extractor_key
-
-        if use_fold_specific_assets:
-            if collection_template:
-                coll = collection_template.format(fold=fold_idx)
-            elif collection_name:
-                coll = f"{collection_name}_fold{fold_idx}"
+                if not fold_weight_path.exists():
+                    raise FileNotFoundError(
+                        f"Missing fold-specific weight: {fold_weight_path}. "
+                        "Copy fold weights before running CV."
+                    )
+                extractor = _extractor_map[extractor_key](
+                    weights_path=str(fold_weight_path)
+                )
+                extractor_id = f"{extractor_key}_fold{fold_idx}"
             else:
-                coll = f"{COLLECTION_NAME}_finetuned_fold{fold_idx}"
-        else:
-            coll = collection_name or COLLECTION_NAME
+                extractor = _extractor_map[extractor_key]()
+                extractor_id = extractor_key
 
-        for env_val in env_strategies:
-            env_label = "E1" if env_val is None else "E2"
-            for agg in agg_strategies:
-                for k in k_values:
-                    run_num += 1
-                    key = (fold_idx, env_label, agg, k, extractor_id, coll)
+            if use_fold_specific_assets:
+                if collection_template:
+                    coll = collection_template.format(fold=fold_idx)
+                elif collection_name:
+                    coll = f"{collection_name}_fold{fold_idx}"
+                else:
+                    coll = f"{COLLECTION_NAME}_finetuned_fold{fold_idx}"
+            else:
+                coll = collection_name or COLLECTION_NAME
 
-                    if key in completed:
-                        print(
-                            f"[{run_num}/{total}] SKIP fold={fold_idx} env={env_label}"
-                            f" agg={agg} k={k} (already done)"
-                        )
-                        continue
+            # ---- build list of pending combos for this fold ----
+            pending: List[Tuple[Optional[str], str, int]] = []
+            skip_count = 0
+            for env_val in env_strategies:
+                env_label = "E1" if env_val is None else "E2"
+                for agg in agg_strategies:
+                    for k in k_values:
+                        key = (fold_idx, env_label, agg, k, extractor_id, coll)
+                        if key in completed:
+                            skip_count += 1
+                        else:
+                            pending.append((env_val, agg, k))
 
-                    print(f"\n{'='*60}")
-                    print(
-                        f"[{run_num}/{total}] fold={fold_idx}  env={env_label}"
-                        f"  agg={agg}  k={k}"
-                    )
-                    print(f"  Test strains: {fold_strains}")
-                    print(f"{'='*60}")
+            if skip_count:
+                pbar.update(skip_count)
+                pbar.set_postfix({"fold": fold_idx, "skipped": skip_count})
 
-                    fold_out = (
-                        run_output_dir
-                        / f"fold{fold_idx}_{env_label}_{agg}_k{k}"
-                    )
-                    fold_out.mkdir(parents=True, exist_ok=True)
+            if not pending:
+                continue
 
-                    results, _ = run_species_evaluation(
-                        client=client,
-                        collection_name=coll,
-                        feature_extractor=extractor,
-                        k=k,
-                        without_siblings=True,
-                        environment=env_val,
-                        strategy=agg,
-                        output_dir=str(fold_out),
-                        generate_visualizations=True,
-                        selected_strains=fold_strains,
-                    )
+            # ---- run pending combos in parallel ----
+            with ThreadPoolExecutor(max_workers=max_workers) as executor:
+                futures = {
+                    executor.submit(
+                        _run_fold_combo,
+                        fold_idx,
+                        fold_strains,
+                        env_val,
+                        agg,
+                        k,
+                        extractor,
+                        extractor_id,
+                        coll,
+                        run_output_dir,
+                        segmented_image_dir,
+                    ): (env_val, agg, k)
+                    for (env_val, agg, k) in pending
+                }
 
-                    # Build CSV rows — one per prediction entry
-                    rows: List[dict] = []
-                    for res in results:
-                        rows.append(
+                for future in as_completed(futures):
+                    try:
+                        key, rows, acc, env_label, agg, k = future.result()
+                        _append_rows(CV_RESULTS_CSV, rows)
+                        completed.add(key)
+                        pbar.update(1)
+                        pbar.set_postfix(
                             {
                                 "fold": fold_idx,
-                                "species": res.get("ground_truth", ""),
-                                "strain": res.get("strain", ""),
-                                "ground_truth": res.get("ground_truth", ""),
-                                "predicted_specy": res.get("predicted_specy", ""),
-                                "correct": int(bool(res.get("correct"))),
-                                "test_set_index": res.get("test_set_index", 0),
-                                "env_strategy": env_label,
-                                "agg_strategy": agg,
+                                "env": env_label,
+                                "agg": agg,
                                 "k": k,
-                                "extractor": extractor_id,
-                                "collection": coll,
+                                "acc": f"{acc:.3f}",
                             }
                         )
+                    except Exception as exc:
+                        env_val_f, agg_f, k_f = futures[future]
+                        env_label_f = "E1" if env_val_f is None else "E2"
+                        tqdm.write(
+                            f"  ✗ fold={fold_idx} env={env_label_f} agg={agg_f} k={k_f} "
+                            f"failed: {exc}"
+                        )
+                        pbar.update(1)
 
-                    _append_rows(CV_RESULTS_CSV, rows)
-
-                    # Compute per-fold accuracy and print
-                    if results:
-                        acc = sum(r.get("correct", False) for r in results) / len(results)
-                    else:
-                        acc = 0.0
-                    print(
-                        f"  → accuracy (fold {fold_idx}, {env_label}, {agg}, k={k}) = {acc:.4f}"
-                        f"  ({len(results)} test samples)"
-                    )
-                    completed.add(key)
-
-    print(f"\n{'='*60}")
-    print(f"Cross-validation complete.  {run_num} runs processed.")
+    print(f"\nCross-validation complete.  {total} runs processed.")
     print(f"Results: {CV_RESULTS_CSV}")
-    print(f"{'='*60}")
 
     _generate_summary(CV_RESULTS_CSV, CV_SUMMARY_CSV)
     print(f"Summary table: {CV_SUMMARY_CSV}")
@@ -363,6 +454,7 @@ def main(
     use_fold_specific_assets: bool = False,
     collection_template: Optional[str] = None,
     weights_dir: str = "weights",
+    max_workers: int = 4,
 ) -> None:
     run_cross_validation(
         collection_name=collection,
@@ -370,6 +462,7 @@ def main(
         use_fold_specific_assets=use_fold_specific_assets,
         collection_template=collection_template,
         weights_dir=weights_dir,
+        max_workers=max_workers,
     )
 
 

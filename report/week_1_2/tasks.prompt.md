@@ -26,7 +26,7 @@ We use cross validation in strain-level which means we will rotate the testset. 
 - Model extractor will be fixed to efficientb1 finetuned.
 - Environment strategy will be assessed between all environment (E2) and same environment (E1).
 - Strategy will be both (weight by score and uniform weight).
-- K will be 3, 5, 7, 9, 11 to see the effect of K on the performance. Why we should not choose a very large K? We have very few data samples.
+- K will be 3, 5, 7, 9, 11, 13, 15 to see the effect of K on the performance. Why we should not choose a very large K? We have very few data samples.
 - We will brute force all the combinations of the above settings and report the performance in each setting. We will also compare the performance between different settings to see which one is better.
 - The results will be just like the output of our #file:src/main.py evaluation command.
 

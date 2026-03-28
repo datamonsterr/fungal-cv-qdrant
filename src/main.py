@@ -9,6 +9,7 @@ from src.config import (
     COLLECTION_NAME,
     FEATURES_JSON_PATH,
     QDRANT_URL,
+    QDRANT_API_KEY,
     RESULTS_DIR,
     SEGMENTED_IMAGE_DIR,
     SEGMENTED_METADATA_PATH,
@@ -59,7 +60,7 @@ def run_extract(args):
     print("Uploading features to Qdrant...")
     from src.database.upload_qdrant import upload_features_to_qdrant
 
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
     upload_features_to_qdrant(
         client=client,
         collection_name=COLLECTION_NAME,
@@ -87,7 +88,7 @@ def run_predict(args):
         ResNet50Extractor,
     )
 
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     # Select extractor
     if args.extractor == "resnet50":
@@ -174,7 +175,7 @@ def run_predict_new(args):  # noqa: C901
     print(f"Using extractor: {extractor.name}")
     print(f"K neighbors: {args.k}")
 
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     # Collect all images from environment subdirectories
     raw_results = []
@@ -378,7 +379,7 @@ def run_evaluate(args):  # noqa: C901
         ViTSAMLExtractor,
     )
 
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     # Use custom collection if specified, otherwise use default
     collection_name = (
@@ -584,7 +585,7 @@ def run_evaluate_all(args):
         ViTSAMLExtractor,
     )
 
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     # Use custom collection if specified, otherwise use default
     collection_name = (
@@ -802,6 +803,7 @@ def run_cross_validate(args):
         use_fold_specific_assets=args.use_fold_specific_assets,
         collection_template=args.collection_template,
         weights_dir=args.weights_dir,
+        max_workers=getattr(args, "max_workers", 4),
     )
     print("Cross-validation complete.")
 

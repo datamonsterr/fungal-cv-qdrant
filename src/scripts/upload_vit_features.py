@@ -13,7 +13,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
 from qdrant_client import QdrantClient
 
-from src.config import QDRANT_URL, SEGMENTED_METADATA_PATH
+from src.config import QDRANT_API_KEY, QDRANT_URL, SEGMENTED_METADATA_PATH
 from src.database.upload_qdrant import upload_features_to_qdrant
 
 
@@ -37,7 +37,7 @@ def upload_vit_features(
 
     print(f"Connecting to Qdrant at {QDRANT_URL}...")
     try:
-        client = QdrantClient(url=QDRANT_URL)
+        client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
         client.get_collections()
         print("Successfully connected to Qdrant!")
     except Exception as e:

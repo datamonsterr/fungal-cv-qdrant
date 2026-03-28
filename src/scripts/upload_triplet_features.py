@@ -17,6 +17,7 @@ sys.path.insert(0, str(project_root))
 from src.config import (
     COLLECTION_NAME,
     QDRANT_URL,
+    QDRANT_API_KEY,
     SEGMENTED_IMAGE_DIR,
     SEGMENTED_METADATA_PATH,
 )
@@ -177,7 +178,7 @@ def main():
     # Connect to Qdrant
     print(f"Connecting to Qdrant at {QDRANT_URL}...")
     try:
-        client = QdrantClient(url=QDRANT_URL)
+        client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
         client.get_collections()
         print("✓ Successfully connected to Qdrant\n")
     except Exception as e:

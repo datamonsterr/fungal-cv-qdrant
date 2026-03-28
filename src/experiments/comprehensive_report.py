@@ -9,7 +9,7 @@ from src.classification.evaluate_species import run_species_evaluation
 from src.classification.visualization.visualize_prediction import (
     batch_visualize_predictions,
 )
-from src.config import COLLECTION_NAME, QDRANT_URL, RESULTS_DIR
+from src.config import COLLECTION_NAME, QDRANT_API_KEY, QDRANT_URL, RESULTS_DIR
 from src.feature_extraction.feature_extractors import (
     ColorHistogramExtractor,
     EfficientNetB1Extractor,
@@ -58,7 +58,7 @@ def run_comprehensive_report(
     print(f"Visualize Correct: {visualize_correct}")
     print(f"Visualize Incorrect: {visualize_incorrect}")
 
-    client = QdrantClient(url=QDRANT_URL)
+    client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
 
     base_output_dir = RESULTS_DIR / identifier
     base_output_dir.mkdir(parents=True, exist_ok=True)

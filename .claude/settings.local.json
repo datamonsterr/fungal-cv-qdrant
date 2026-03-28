@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv add:*)",
+      "Bash(uv run:*)",
+      "Bash(python -c \"from src.config import DATASET_ROOT, ORIGINAL_DATASET_PATH; print\\(''DATASET_ROOT:'', DATASET_ROOT\\); print\\(''ORIGINAL_DATASET_PATH:'', ORIGINAL_DATASET_PATH\\)\")",
+      "Bash(unzip -l /workspace/original-20260324T075533Z-3-001.zip)",
+      "Bash(mkdir -p /workspace/fungal-cv-qdrant/Dataset)",
+      "Bash(unzip -q /workspace/original-20260324T075533Z-3-001.zip -d /workspace/fungal-cv-qdrant/Dataset/)",
+      "Bash(mkdir -p /workspace/fungal-cv-qdrant/weights)",
+      "Bash(unzip -q /workspace/weights.zip -d /workspace/fungal-cv-qdrant/)",
+      "Bash(docker compose:*)",
+      "Read(//usr/local/bin/**)",
+      "Bash(pip show:*)",
+      "Read(//root/**)",
+      "Bash(find / -name qdrant -type f)",
+      "Bash(ls /qdrant)",
+      "Read(//usr/bin/**)",
+      "Read(//usr/**)",
+      "Bash(pip3 list:*)",
+      "Bash(curl -sf http://localhost:6333/healthz)",
+      "Bash(find /workspace/fungal-cv-qdrant/Dataset/original -name *.jpg)"
+    ]
+  }
+}

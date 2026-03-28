@@ -10,6 +10,7 @@ from src.config import (
     COLLECTION_NAME,
     FEATURES_JSON_PATH,
     QDRANT_URL,
+    QDRANT_API_KEY,
     SEGMENTED_METADATA_PATH,
 )
 
@@ -134,7 +135,7 @@ def main() -> None:
 
     print(f"Connecting to Qdrant at {QDRANT_URL}...")
     try:
-        client = QdrantClient(url=QDRANT_URL)
+        client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
         client.get_collections()
         print("Successfully connected to Qdrant!")
     except Exception as e:

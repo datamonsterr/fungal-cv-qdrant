@@ -11,7 +11,7 @@ from typing import Optional
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-from src.config import COLLECTION_NAME, FEATURES_JSON_PATH, QDRANT_URL, SEGMENTED_METADATA_PATH
+from src.config import COLLECTION_NAME, FEATURES_JSON_PATH, QDRANT_API_KEY, QDRANT_URL, SEGMENTED_METADATA_PATH
 
 
 def upload_combined_features_to_new_collection(  # noqa: C901
@@ -213,7 +213,7 @@ def main(fold_index: Optional[int] = None):
     # Connect to Qdrant
     print(f"Connecting to Qdrant at {QDRANT_URL}...")
     try:
-        client = QdrantClient(url=QDRANT_URL)
+        client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY, timeout=120)
         client.get_collections()
         print("✓ Successfully connected to Qdrant\n")
     except Exception as e:
@@ -228,7 +228,7 @@ def main(fold_index: Optional[int] = None):
             new_collection_name=new_collection_name,
             old_features_path=old_features_path,
             finetuned_features_path=finetuned_path,
-            batch_size=100,
+            batch_size=10,
         )
         print(f"\n✅ Successfully created collection '{new_collection_name}'")
     except Exception as e:
