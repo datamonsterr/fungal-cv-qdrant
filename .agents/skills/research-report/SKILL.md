@@ -1,150 +1,53 @@
-# Research Report Writer
+---
+name: research-report
+description: "Generate or update experiment research reports using report/{exp_name}/{report_number}/content.md context, enforce nested report folder templates, and validate LaTeX with report/render_report.py. Use for 'generate report', 'write report', or LaTeX report rendering/validation tasks."
+---
 
-## Overview
+# Research Report Skill
 
-Generates a structured academic-style Markdown report for a given work phase by reading the definition-of-done, git history, results data, and existing visualizations. Produces output to `report/<folder>/REPORT.md` that can be converted to PDF/HTML.
+## Use When
 
-## Trigger Conditions
+- User asks to generate/update report content for an experiment folder
+- User asks to render report PDF from LaTeX
+- User asks to validate report folder structure or LaTeX build
 
-Use this skill when the user says any of:
-- "write report", "generate report", "create report"
-- "write week X report", "document this phase", "summarize this week's work"
-- "produce the DOD report", "fill the report template"
+## Canonical Report Structure
+
+- `report/{exp_name}/{report_number}/content.md` (context source)
+- `report/{exp_name}/{report_number}/notes.txt` (free-form notes)
+- `report/{exp_name}/{report_number}/results.txt` (result summary)
+- `report/{exp_name}/{report_number}/images/` (visualization assets)
+- `report/{exp_name}/{report_number}/main.tex` (LaTeX output)
+- `report/templates/main.tex` (template source)
+
+The renderer (`report/render_report.py`) bootstraps missing `content.md`, `notes.txt`, `results.txt`, `images/README.md`, and `main.tex`.
 
 ## Workflow
 
-### Step 1 — Identify the report scope
+1. Resolve target experiment and report number (e.g. `cross_validation/001`).
+2. Read context from `report/{exp_name}/{report_number}/content.md`.
+3. Gather execution context: git history, changed files, result CSVs, report images.
+4. Write/update `report/{exp_name}/{report_number}/main.tex`.
+5. Validate and render with:
 
-Ask the user (or infer from context):
-- Which phase/week? (e.g. `week_1_2`, `week_3_4`)
-- Output folder: `report/<folder>/` — create it if it doesn't exist
-- DOD file: check `report/<folder>/report_dod.md` or `report/<folder>/tasks.prompt.md`
-
-### Step 2 — Read the Definition of Done
-
-Read the DOD file to extract required sections and acceptance criteria. Every section listed there is **mandatory** in the output.
-
-For this project the standard DOD sections are:
-1. **Overview** — problem intro, glossary, purpose of the analysis
-2. **Methodology** — fold/split design, strategy definitions, diagrams
-3. **Implementation** — pipeline brief + Mermaid block diagrams of key scripts
-4. **Results** — comparison charts with captions, best-config analysis
-5. **Conclusion** — key outcomes, practical recommendation
-
-### Step 3 — Gather work context (run in parallel)
-
-```
-Read: report/<folder>/tasks.prompt.md      # what was planned
-Read: CLAUDE.md                            # project architecture
-Bash: git log --oneline -20                # what was actually done
-Bash: git diff HEAD~5..HEAD --stat         # files changed
-Bash: ls results/cross_validation/         # result artifacts
-Bash: ls report/<folder>/                  # existing images/charts
-Read: results/cross_validation/*.csv       # numerical results (if exist)
+```bash
+uv run python report/render_report.py --report-dir report/<exp_name>/<report_number>
 ```
 
-Also read any images listed in `report/<folder>/` — note their filenames so you can embed them.
+6. If needed, skip LaTeX validation compile with:
 
-### Step 4 — Extract results data
-
-From the CSV results files, compute:
-- Best configuration (highest accuracy)
-- Accuracy range across all K / strategy / environment combinations
-- Whether E1 vs E2 shows meaningful difference
-- Whether weighted vs uniform shows meaningful difference
-
-Use a markdown table to summarize all configurations.
-
-### Step 5 — Write each report section
-
-Follow `references/report_structure.md` for the exact section template.
-
-Key writing rules:
-- Lead with numbers and findings, not narrative setup
-- Every chart/image embedded as `![caption](relative/path/to/image.png)`
-- Every Mermaid diagram wrapped in ` ```mermaid ``` `
-- Tables for structured comparisons (never prose lists for data)
-- Keep terminology consistent with the project glossary (see below)
-
-### Step 6 — Mermaid diagrams
-
-For Implementation section, generate two diagrams:
-
-**Pipeline diagram** (flowchart LR):
-```
-Image → Preprocess → Segment → FeatureExtract → Qdrant → KNNQuery → VoteAggregate → Prediction
+```bash
+uv run python report/render_report.py --report-dir report/<exp_name>/<report_number> --skip-validate
 ```
 
-**Cross-validation script diagram** (flowchart TD):
-```
-LoadFoldMapping → ForEachFold:
-  LoadFoldWeights → ExtractFeatures → UploadToQdrant → RunEvaluate → AppendCSV
-→ AggregateResults → Visualize
-```
+## LaTeX Validation Rules
 
-### Step 7 — Write output file
+- Default mode runs `pdflatex -interaction=nonstopmode -halt-on-error`.
+- Any LaTeX error fails the command (non-zero exit).
+- Fix invalid TeX and rerun validation before marking done.
 
-Write to `report/<folder>/REPORT.md`. Structure:
+## Report Writing Guidelines
 
-```markdown
-# <Title>
-
-## 1. Overview
-### 1.1 Problem Introduction
-### 1.2 Glossary
-### 1.3 Purpose of This Analysis
-
-## 2. Methodology
-### 2.1 Fold Design
-### 2.2 Strain-Level Split Rationale
-### 2.3 Configuration Space
-
-## 3. Implementation
-### 3.1 Vector Database Pipeline
-### 3.2 Cross-Validation Script Architecture
-
-## 4. Results
-### 4.1 Full Configuration Comparison
-### 4.2 Best Configuration Analysis
-### 4.3 Hyperparameter Sensitivity
-
-## 5. Conclusion
-```
-
-## Project Glossary (embed in Overview section)
-
-| Term | Definition |
-|------|-----------|
-| Strain | A specific fungal isolate (e.g. DTO 148-D1) |
-| Species | The taxonomic label to predict (5 *Penicillium* species) |
-| Environment | Growth medium (MEA, CYA, YES, etc.) |
-| E1 (same env) | KNN candidates restricted to same growth medium as query |
-| E2 (all env) | KNN candidates from all growth media |
-| E3\_`<ENV>` | Query images from one specific medium only |
-| E4\_`<ENV>` | Exclude one medium from the candidate pool |
-| weighted / score | Score-weighted vote aggregation |
-| uni | Uniform-count vote aggregation |
-| K | Number of nearest neighbours retrieved |
-| Fold | One cross-validation split: one test strain per species |
-
-## Data Sources Reference
-
-| Source | Path | Content |
-|--------|------|---------|
-| Results CSV | `results/cross_validation/*.csv` | Per-fold, per-config accuracy |
-| Images | `report/<folder>/` | Charts generated by cv_visualize.py |
-| Training artifacts | `report/final_gr2/training/images/` | Confusion matrices, training curves |
-| Data visualizations | `report/final_gr2/data_visualization/` | t-SNE, UMAP plots |
-| Pipeline diagrams | `report/final_gr2/mermaid/` | Preprocessed flow, query flow PNGs |
-| Fold mappings | `Dataset/strain_to_specy_fold*.csv` | Which strains are in each fold |
-
-## Output Checklist
-
-Before finishing, verify the report has:
-- [ ] All DOD sections present
-- [ ] Glossary table with all terms
-- [ ] At least one Mermaid diagram (pipeline or CV script)
-- [ ] Results summary table with all K × strategy × env combinations
-- [ ] Best configuration highlighted with reasoning
-- [ ] All images embedded with descriptive alt text
-- [ ] Conclusion with concrete recommendation (which K, which strategy)
+- Follow `references/report_structure.md` for section templates.
+- Include metrics/tables grounded in available artifacts.
+- Keep figures and paths reproducible and workspace-relative.

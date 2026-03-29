@@ -21,6 +21,16 @@
       "sourceType": "github",
       "computedHash": "09b2d9cdf83b2ff713f85e5545d351b6e261a1f473ca553a73fe599ef3aefb92"
     },
+    "latex-build": {
+      "source": "terrylica/cc-skills",
+      "sourceType": "github",
+      "computedHash": "bcd0298a3db6d174f89185aad002df3ac752fd2aa5692c71282a1e214c7e46fc"
+    },
+    "latex-document": {
+      "source": "ndpvt-web/latex-document-skill",
+      "sourceType": "github",
+      "computedHash": "e5ad5b6f2bd8b3679dd0441a97baee83b50cb9d68562827a9173d767ecc55943"
+    },
     "mermaid": {
       "source": "markdown-viewer/skills",
       "sourceType": "github",

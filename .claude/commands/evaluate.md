@@ -1,25 +1,9 @@
-Run the standard evaluation with the finetuned collection using EfficientNetB1 finetuned extractor.
+Run evaluation through module entrypoints.
 
-Make sure Qdrant is running first:
+Example single evaluation:
+
 ```bash
-docker compose up -d
+uv run python -m src.experiments.cross_validation.run --collection myco_fungi_features_full_finetuned
 ```
 
-Then run:
-```bash
-uv run python src/main.py evaluate \
-  --extractor efficientnetb1_finetuned \
-  --k 7 \
-  --strategy weighted \
-  --environment all \
-  --collection myco_fungi_features_full_finetuned
-```
-
-To evaluate all extractor/strategy combinations:
-```bash
-uv run python src/main.py evaluate-all \
-  --k 7 \
-  --collection myco_fungi_features_full_finetuned
-```
-
-Results are saved to `results/run_<timestamp>_k<K>/`.
+For custom programmatic evaluation use functions from src/evaluate.py.
