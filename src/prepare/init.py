@@ -15,11 +15,11 @@ def run_prepare_init(collection_name: str = COLLECTION_NAME, batch_size: int = 1
     if not ok:
         raise RuntimeError(msg)
 
-    print("Running dataset reformat...")
-    reformat_dataset()
-
     print("Generating strain mapping...")
     generate_strain_mapping()
+
+    print("Running dataset reformat (flat + hierarchical)...")
+    reformat_dataset(create_hierarchical=True)
 
     ok, msg = check_metadata_exists()
     print(msg)

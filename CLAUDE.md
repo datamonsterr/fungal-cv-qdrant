@@ -15,11 +15,10 @@ The repository now uses a multi-research architecture inspired by autoresearch w
   - feature_extraction
   - finetune_dl
   - cross_validation
+  - each experiment should own a local check.py contract
   - additional experiment folders, each with program.md
 - src/utils
   - reusable scripts and unified upload_qdrant
-- src/check
-  - immutable pass/fail targets per experiment
 - src/analysis
   - visualization and analysis scripts
 

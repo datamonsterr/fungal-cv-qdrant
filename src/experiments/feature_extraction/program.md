@@ -14,4 +14,4 @@ Generate named-vector features for all enabled extractors.
 - `Dataset/segmented_features.json`
 
 ## Check Target
-Use `src/check/feature_extraction_check.py` once created for vector-shape and coverage checks.
+Use `src/experiments/feature_extraction/check.py` for vector-shape and coverage checks.

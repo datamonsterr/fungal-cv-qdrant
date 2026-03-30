@@ -8,6 +8,7 @@ import cv2
 import pandas as pd
 
 from src.config import (
+    DATASET_ROOT,
     FULL_IMAGE_METADATA_PATH,
     FULL_IMAGE_PATH,
     ORIGINAL_DATASET_PATH,
@@ -22,7 +23,7 @@ from src.experiments.preprocessing.preprocess import process_image
 POSSIBLE_ENVIRONMENTS = []
 POSSIBLE_ANGLES = ["ob", "rev"]
 FILE_EXTENSION = ".jpg"
-METADATA_LIST: list[dict[str, dict[str, str] | str]] = []
+HIERARCHICAL_DATASET_PATH = DATASET_ROOT / "hierarchical"
 
 
 def get_specy_from_strain(strain: str, strain_to_specy: pd.DataFrame) -> str | None:
@@ -66,7 +67,53 @@ class Metadata:
         self.filename = self.filename.removesuffix("_edited")
 
 
-def reformat_dataset():
+def _save_hierarchical_segment(
+    metadata: Metadata,
+    segment_img,
+    segment_index: int,
+) -> str:
+    """Save one segmented image into Dataset/hierarchical and return relative path."""
+    clean_strain = metadata.strain.replace(" ", "_").replace("/", "-")
+    hierarchical_filename = (
+        f"{clean_strain}_{metadata.environment}_{metadata.angle}"
+        f"_seg{segment_index}{FILE_EXTENSION}"
+    )
+    hierarchical_dir = (
+        HIERARCHICAL_DATASET_PATH
+        / metadata.specy
+        / metadata.strain
+        / metadata.environment
+    )
+    hierarchical_dir.mkdir(parents=True, exist_ok=True)
+    hierarchical_file_path = hierarchical_dir / hierarchical_filename
+    cv2.imwrite(str(hierarchical_file_path), segment_img)
+    return str(hierarchical_file_path.relative_to(PROJECT_ROOT))
+
+
+def _save_hierarchical_original(
+    metadata: Metadata,
+    image_id: str,
+    full_img_path,
+) -> str:
+    """Save one full/original image into Dataset/hierarchical and return relative path."""
+    clean_strain = metadata.strain.replace(" ", "_").replace("/", "-")
+    hierarchical_filename = (
+        f"{clean_strain}_{metadata.environment}_{metadata.angle}_{image_id}_original"
+        f"{FILE_EXTENSION}"
+    )
+    hierarchical_dir = (
+        HIERARCHICAL_DATASET_PATH
+        / metadata.specy
+        / metadata.strain
+        / metadata.environment
+    )
+    hierarchical_dir.mkdir(parents=True, exist_ok=True)
+    hierarchical_file_path = hierarchical_dir / hierarchical_filename
+    shutil.copyfile(full_img_path, hierarchical_file_path)
+    return str(hierarchical_file_path.relative_to(PROJECT_ROOT))
+
+
+def reformat_dataset(create_hierarchical: bool = True):
     # Load mapping
     if os.path.exists(STRAIN_SPECIES_MAPPING_PATH):
         strain_to_specy = pd.read_csv(STRAIN_SPECIES_MAPPING_PATH)
@@ -86,6 +133,7 @@ def reformat_dataset():
         with open(SEGMENTED_METADATA_PATH, "w") as f:
             json.dump([], f)
 
+    metadata_list: list[dict[str, dict[str, str] | str]] = []
     segment_metadata_list: list[dict[str, dict[str, str] | str]] = []
 
     if not ORIGINAL_DATASET_PATH.exists():
@@ -108,7 +156,15 @@ def reformat_dataset():
 
                 # Copy full image
                 shutil.copyfile(original_img_path, full_img_path)
-                METADATA_LIST.append(metadata.get_metadata())
+                full_metadata = metadata.get_metadata()
+                full_metadata["file_path"] = str(full_img_path.relative_to(PROJECT_ROOT))
+                if create_hierarchical:
+                    full_metadata["hierarchical_path"] = _save_hierarchical_original(
+                        metadata=metadata,
+                        image_id=id,
+                        full_img_path=full_img_path,
+                    )
+                metadata_list.append(full_metadata)
 
                 print(f"Processing {filename}...")
 
@@ -155,20 +211,12 @@ def reformat_dataset():
                             segment_path.relative_to(PROJECT_ROOT)
                         )
 
-                        # Construct hierarchical path
-                        clean_strain = metadata.strain.replace(" ", "_").replace(
-                            "/", "-"
-                        )
-                        hierarchical_filename = (
-                            f"{clean_strain}_{metadata.environment}_"
-                            f"{metadata.angle}_seg{i}{FILE_EXTENSION}"
-                        )
-                        hierarchical_path = (
-                            f"Dataset/hierarchical/{metadata.specy}/"
-                            f"{metadata.strain}/{metadata.environment}/"
-                            f"{hierarchical_filename}"
-                        )
-                        seg_metadata["hierarchical_path"] = hierarchical_path
+                        if create_hierarchical:
+                            seg_metadata["hierarchical_path"] = _save_hierarchical_segment(
+                                metadata=metadata,
+                                segment_img=segment_img,
+                                segment_index=i,
+                            )
 
                         segment_metadata_list.append(seg_metadata)
 
@@ -180,13 +228,13 @@ def reformat_dataset():
 
     # Save metadata files
     with open(FULL_IMAGE_METADATA_PATH, "w") as f:
-        json.dump(METADATA_LIST, f, indent=4)
+        json.dump(metadata_list, f, indent=4)
 
     with open(SEGMENTED_METADATA_PATH, "w") as f:
         json.dump(segment_metadata_list, f, indent=4)
 
     print("\nProcessing complete!")
-    print(f"Full images: {len(METADATA_LIST)}")
+    print(f"Full images: {len(metadata_list)}")
     print(f"Segmented images: {len(segment_metadata_list)}")
 
 

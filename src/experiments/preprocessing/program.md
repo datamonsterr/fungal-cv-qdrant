@@ -14,4 +14,4 @@ Preprocess dish images and produce segmented colony candidates.
 - Processed images and segment bounding boxes for downstream extraction.
 
 ## Check Target
-Use `src/check/preprocessing_check.py` once created to enforce metadata/image quality checks.
+Use `src/experiments/preprocessing/check.py` to enforce metadata/image quality checks.

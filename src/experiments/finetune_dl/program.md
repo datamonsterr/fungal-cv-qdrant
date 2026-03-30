@@ -14,4 +14,4 @@ Fine-tune DL backbones and export model weights for downstream feature extractio
 - Training artifacts in `results/` or experiment-specific folders.
 
 ## Check Target
-Use `src/check/finetune_dl_check.py` once created to enforce accuracy/loss targets.
+Use `src/experiments/finetune_dl/check.py` once created to enforce accuracy/loss targets.

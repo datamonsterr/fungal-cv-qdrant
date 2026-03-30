@@ -9,7 +9,7 @@ The repository is organized for multi-experiment autoresearch workflows:
 - src/prepare: bootstrap from raw dataset to ready artifacts and upload
 - src/experiments: experiment implementations by use case
 - src/utils: shared utilities (including unified upload_qdrant)
-- src/check: immutable experiment targets
+- src/experiments/*/check.py: immutable experiment targets colocated with each experiment
 - src/analysis: custom visualizations
 
 ## Stack

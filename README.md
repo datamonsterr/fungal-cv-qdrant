@@ -1,14 +1,14 @@
 # Myco Fungi Multi-Research Workflow
 
 This repository now follows a multi-experiment autoresearch-style layout.
-Core code remains under src/, but execution is organized by prepare -> experiments -> check -> analysis.
+Core code remains under src/, with per-experiment checks colocated under each experiment folder.
 
 ## High-Level Workflow
 
 1. Put raw data in Dataset/original/
 2. Run prepare bootstrap
 3. Run one or more experiment programs
-4. Run immutable checks for each experiment
+4. Run immutable checks from each experiment package
 5. Generate analysis visualizations
 6. Produce per-experiment LaTeX reports
 
@@ -17,7 +17,7 @@ Core code remains under src/, but execution is organized by prepare -> experimen
 - src/prepare: initialization pipeline and data/qdrant checks
 - src/experiments: experiment implementations (preprocessing, feature extraction, finetune_dl, cross_validation, etc.)
 - src/utils: reusable helper modules and unified uploader
-- src/check: concise immutable targets for each experiment
+- src/experiments/*/check.py: concise immutable targets colocated with each experiment
 - src/analysis: visualization and analysis scripts
 - report: archived markdown reports; new experiments should generate LaTeX reports
 
@@ -83,4 +83,4 @@ Colab assets are under src/experiments/finetune_dl/colab/.
 
 - src/main.py was removed by design.
 - Qdrant named vectors must still match extractor names.
-- New experiments should include program.md and a corresponding check target.
+- New experiments should include program.md and a colocated check.py target.

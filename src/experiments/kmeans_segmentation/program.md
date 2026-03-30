@@ -13,4 +13,4 @@ Run K-means segmentation experiments and inspect contour quality.
 - Segmentation debug plots and intermediate artifacts in local output folders.
 
 ## Check Target
-Use `src/check/kmeans_segmentation_check.py` once created to lock expected quality thresholds.
+Use `src/experiments/kmeans_segmentation/check.py` once created to lock expected quality thresholds.

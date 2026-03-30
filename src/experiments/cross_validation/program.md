@@ -16,4 +16,4 @@ Run strain-level cross-validation experiments and track resumable metrics.
 - CSV metrics in `results/` and report artifacts under `report/`.
 
 ## Check Target
-Use `src/check/cross_validation_check.py` once created to assert target metrics.
+Use `src/experiments/cross_validation/check.py` to assert target metrics.

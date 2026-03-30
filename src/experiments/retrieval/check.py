@@ -1,4 +1,4 @@
-"""Validation checks for reorganized ensemble/retrieval modules."""
+"""Validation checks for retrieval experiment outputs and module layout."""
 
 from src.analysis.retrieval import (
     batch_visualize_complementary,
@@ -8,16 +8,23 @@ from src.analysis.retrieval import (
 )
 from src.experiments.retrieval import ensemble_analysis
 
+MIN_RETRIEVAL_RESULTS = 1
 
-def run() -> None:
-    """Run lightweight import/symbol checks for reorganized modules."""
+
+def run_check(result_records: int) -> bool:
+    """Return True when retrieval result count satisfies the minimum target."""
+    return result_records >= MIN_RETRIEVAL_RESULTS
+
+
+def run_reorg_check() -> None:
+    """Run lightweight import/symbol checks for reorganized retrieval modules."""
     assert hasattr(ensemble_analysis, "main")
     assert hasattr(ensemble_report, "main")
     assert hasattr(compare_ensemble_strategies, "compare_strategies")
     assert hasattr(batch_visualize_complementary, "main")
     assert hasattr(visualize_complementary_cases, "main")
-    print("ensemble_reorg_check: PASS")
+    print("retrieval_check: PASS")
 
 
 if __name__ == "__main__":
-    run()
+    run_reorg_check()

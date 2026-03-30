@@ -18,7 +18,7 @@ author: project
 1. src/experiments/<experiment_name>/
 1. src/experiments/<experiment_name>/program.md
 1. src/experiments/<experiment_name>/run.py
-1. src/check/<experiment_name>_check.py
+1. src/experiments/<experiment_name>/check.py
 1. report/<experiment_name>/content.md
 1. report/<experiment_name>/main.tex
 
