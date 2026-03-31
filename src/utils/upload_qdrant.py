@@ -6,7 +6,12 @@ from typing import Dict, List
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
-from src.config import COLLECTION_NAME, QDRANT_API_KEY, QDRANT_URL, SEGMENTED_METADATA_PATH
+from src.config import (
+    COLLECTION_NAME,
+    QDRANT_API_KEY,
+    QDRANT_URL,
+    SEGMENTED_METADATA_PATH,
+)
 
 
 def create_collection(

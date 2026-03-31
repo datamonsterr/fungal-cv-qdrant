@@ -13,7 +13,9 @@ from src.config import (
     SEGMENTED_METADATA_PATH,
     WEIGHTS_DIR,
 )
-from src.experiments.feature_extraction.feature_extractors import EfficientNetB1TripletExtractor
+from src.experiments.feature_extraction.feature_extractors import (
+    EfficientNetB1TripletExtractor,
+)
 
 
 def extract_triplet_features(

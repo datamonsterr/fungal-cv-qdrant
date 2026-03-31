@@ -11,12 +11,11 @@ import os
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
-from src.experiments.retrieval.run import predict
 from src.analysis.visualization.visualize_prediction import (
     visualize_prediction_by_environment,
 )
-
 from src.config import SEGMENTED_IMAGE_DIR
+from src.experiments.retrieval.run import predict
 
 
 def load_results_from_folder(folder_path: str) -> Tuple[List[Dict[str, Any]], Dict]:
@@ -334,7 +333,9 @@ def main():
         print(
             f"Correction rate: {correction_rate:.1f}% of ColorHistogramHS errors were corrected by other models"
         )
-        print("This low rate explains why ensemble (66.67%) performs worse than ColorHistogramHS alone (75%)")
+        print(
+            "This low rate explains why ensemble (66.67%) performs worse than ColorHistogramHS alone (75%)"
+        )
     print()
 
 

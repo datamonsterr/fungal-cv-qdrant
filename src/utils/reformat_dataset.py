@@ -157,7 +157,9 @@ def reformat_dataset(create_hierarchical: bool = True):
                 # Copy full image
                 shutil.copyfile(original_img_path, full_img_path)
                 full_metadata = metadata.get_metadata()
-                full_metadata["file_path"] = str(full_img_path.relative_to(PROJECT_ROOT))
+                full_metadata["file_path"] = str(
+                    full_img_path.relative_to(PROJECT_ROOT)
+                )
                 if create_hierarchical:
                     full_metadata["hierarchical_path"] = _save_hierarchical_original(
                         metadata=metadata,
@@ -212,10 +214,12 @@ def reformat_dataset(create_hierarchical: bool = True):
                         )
 
                         if create_hierarchical:
-                            seg_metadata["hierarchical_path"] = _save_hierarchical_segment(
-                                metadata=metadata,
-                                segment_img=segment_img,
-                                segment_index=i,
+                            seg_metadata["hierarchical_path"] = (
+                                _save_hierarchical_segment(
+                                    metadata=metadata,
+                                    segment_img=segment_img,
+                                    segment_index=i,
+                                )
                             )
 
                         segment_metadata_list.append(seg_metadata)

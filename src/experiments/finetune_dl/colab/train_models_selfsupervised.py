@@ -265,7 +265,9 @@ def info_nce_loss(features, temperature=0.5):
 
 def get_efficientnet_encoder(pretrained=True):
     """Get EfficientNetB1 encoder without classification head."""
-    model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT if pretrained else None)
+    model = efficientnet_b1(
+        weights=EfficientNet_B1_Weights.DEFAULT if pretrained else None
+    )
     # Remove classification head
     encoder = nn.Sequential(*list(model.children())[:-1], nn.Flatten())
     return encoder
@@ -622,7 +624,9 @@ def main():  # noqa: C901
     )
 
     # Save pretrained encoder
-    pretrained_encoder_path = WEIGHTS_DIR / "EfficientNetB1_SimCLR_pretrained_encoder.pth"
+    pretrained_encoder_path = (
+        WEIGHTS_DIR / "EfficientNetB1_SimCLR_pretrained_encoder.pth"
+    )
     torch.save(simclr_model.encoder.state_dict(), pretrained_encoder_path)
     print(f"Saved pretrained encoder to {pretrained_encoder_path}")
 

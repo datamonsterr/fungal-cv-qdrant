@@ -176,10 +176,10 @@ def _run_fold_combo(
 
     Returns (key, rows, accuracy, env_label, agg, k).
     """
-    from src.experiments.retrieval.run import run_species_evaluation
     from src.analysis.visualization.visualize_prediction import (
         batch_visualize_predictions,
     )
+    from src.experiments.retrieval.run import run_species_evaluation
 
     env_label = "E1" if env_val is None else "E2"
     key = (fold_idx, env_label, agg, k, extractor_id, coll)
@@ -231,7 +231,9 @@ def _run_fold_combo(
         for res in results
     ]
 
-    acc = sum(r.get("correct", False) for r in results) / len(results) if results else 0.0
+    acc = (
+        sum(r.get("correct", False) for r in results) / len(results) if results else 0.0
+    )
     return key, rows, acc, env_label, agg, k
 
 

@@ -137,7 +137,9 @@ def build_model(num_classes: int, device: torch.device) -> nn.Module:
 
 def save_backbone_weights(model: nn.Module, save_path: Path) -> None:
     state_dict = model.state_dict()
-    backbone_state = {k: v for k, v in state_dict.items() if not k.startswith("classifier.")}
+    backbone_state = {
+        k: v for k, v in state_dict.items() if not k.startswith("classifier.")
+    }
     torch.save(backbone_state, save_path)
     print(f"Saved backbone weights to: {save_path}")
 
@@ -202,7 +204,9 @@ def train_one_fold(
                     epochs_no_improve += 1
 
         if epochs_no_improve >= patience:
-            print(f"Early stopping after {epochs_no_improve} epochs without improvement")
+            print(
+                f"Early stopping after {epochs_no_improve} epochs without improvement"
+            )
             break
 
     print(f"Best validation accuracy: {best_acc:.4f}")
@@ -402,7 +406,9 @@ def load_fold_split(
     print(f"Validation samples: {len(val_paths)}")
 
     if not train_paths or not val_paths:
-        raise RuntimeError("Empty train/validation split. Check fold mapping and hierarchical data.")
+        raise RuntimeError(
+            "Empty train/validation split. Check fold mapping and hierarchical data."
+        )
 
     return train_paths, train_labels, val_paths, val_labels
 
@@ -472,8 +478,12 @@ def main() -> None:
     }
 
     dataloaders = {
-        "train": DataLoader(datasets["train"], batch_size=batch_size, shuffle=True, num_workers=2),
-        "val": DataLoader(datasets["val"], batch_size=batch_size, shuffle=False, num_workers=2),
+        "train": DataLoader(
+            datasets["train"], batch_size=batch_size, shuffle=True, num_workers=2
+        ),
+        "val": DataLoader(
+            datasets["val"], batch_size=batch_size, shuffle=False, num_workers=2
+        ),
     }
 
     model = build_model(num_classes=len(class_names), device=device)

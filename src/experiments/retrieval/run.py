@@ -23,8 +23,8 @@ from src.config import (
     SEGMENTED_IMAGE_DIR,
     STRAIN_SPECIES_MAPPING_PATH,
 )
-from src.utils.qdrant_query import find_nearest_neighbors_by_id
 from src.experiments.feature_extraction.feature_extractors import FeatureExtractor
+from src.utils.qdrant_query import find_nearest_neighbors_by_id
 
 
 def get_extractor_by_name(name: str) -> Optional[FeatureExtractor]:
@@ -529,7 +529,9 @@ def collect_testset(
                     "ob": ["ob", "obverse"],
                     "rev": ["rev", "reverse"],
                 }
-                for angle_var in angle_variations.get(preferred_angle, [preferred_angle]):
+                for angle_var in angle_variations.get(
+                    preferred_angle, [preferred_angle]
+                ):
                     if (
                         angle_var in segment_images[segment_idx]
                         and segment_images[segment_idx][angle_var]
@@ -583,7 +585,10 @@ def collect_testset(
 
             if img_selected is not None:
                 test_set.append(img_selected)
-                combo_key = (img_selected["image_id"], img_selected.get("angle", "unknown"))
+                combo_key = (
+                    img_selected["image_id"],
+                    img_selected.get("angle", "unknown"),
+                )
                 used_image_angle_per_env[env].add(combo_key)
             else:
                 break
@@ -812,7 +817,9 @@ def run_species_evaluation(
                 max_visualizations=None,
             )
 
-        print(f"  Visualizations saved to: {os.path.join(output_dir, 'visualizations')}")
+        print(
+            f"  Visualizations saved to: {os.path.join(output_dir, 'visualizations')}"
+        )
 
     return results, report_path
 
@@ -877,7 +884,9 @@ def run_comprehensive_report(
                 if visualize_correct:
                     batch_visualize_predictions(
                         prediction_results=results,
-                        segmented_image_dir=str(Path.cwd() / "Dataset" / "segmented_image"),
+                        segmented_image_dir=str(
+                            Path.cwd() / "Dataset" / "segmented_image"
+                        ),
                         output_dir=str(output_dir / "visualizations" / "correct"),
                         k=k,
                         filter_correct=True,
@@ -887,7 +896,9 @@ def run_comprehensive_report(
                 if visualize_incorrect:
                     batch_visualize_predictions(
                         prediction_results=results,
-                        segmented_image_dir=str(Path.cwd() / "Dataset" / "segmented_image"),
+                        segmented_image_dir=str(
+                            Path.cwd() / "Dataset" / "segmented_image"
+                        ),
                         output_dir=str(output_dir / "visualizations" / "incorrect"),
                         k=k,
                         filter_correct=False,

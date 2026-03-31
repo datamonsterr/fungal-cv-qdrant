@@ -9,7 +9,9 @@ from src.utils.reformat_dataset import reformat_dataset
 from src.utils.upload_qdrant import upload_features_to_qdrant
 
 
-def run_prepare_init(collection_name: str = COLLECTION_NAME, batch_size: int = 100) -> None:
+def run_prepare_init(
+    collection_name: str = COLLECTION_NAME, batch_size: int = 100
+) -> None:
     ok, msg = check_dataset_root()
     print(msg)
     if not ok:
@@ -36,6 +38,7 @@ def run_prepare_init(collection_name: str = COLLECTION_NAME, batch_size: int = 1
 
     print("Uploading features to Qdrant...")
     from qdrant_client import QdrantClient
+
     from src.config import QDRANT_API_KEY, QDRANT_URL
 
     client = QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)

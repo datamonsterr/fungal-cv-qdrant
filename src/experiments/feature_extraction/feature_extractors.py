@@ -547,7 +547,9 @@ class ResNet50FinetunedExtractor(ResNet50Extractor):
 class MobileNetV2FinetunedExtractor(MobileNetV2Extractor):
     """MobileNetV2 extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
 
-    def __init__(self, weights_path: Optional[str] = "weights/MobileNetV2_finetuned.pth"):
+    def __init__(
+        self, weights_path: Optional[str] = "weights/MobileNetV2_finetuned.pth"
+    ):
         super().__init__(weights_path=weights_path)
         # Override name to match the vector name in Qdrant
         self.name = "MobileNetV2_finetuned"
@@ -556,7 +558,9 @@ class MobileNetV2FinetunedExtractor(MobileNetV2Extractor):
 class EfficientNetB1FinetunedExtractor(EfficientNetB1Extractor):
     """EfficientNetB1 extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
 
-    def __init__(self, weights_path: Optional[str] = "weights/EfficientNetB1_finetuned.pth"):
+    def __init__(
+        self, weights_path: Optional[str] = "weights/EfficientNetB1_finetuned.pth"
+    ):
         super().__init__(weights_path=weights_path)
         # Override name to match the vector name in Qdrant
         self.name = "EfficientNetB1_finetuned"
@@ -565,13 +569,17 @@ class EfficientNetB1FinetunedExtractor(EfficientNetB1Extractor):
 class EfficientNetB1TripletExtractor(EfficientNetB1Extractor):
     """EfficientNetB1 extractor that uses triplet loss fine-tuned weights."""
 
-    def __init__(self, weights_path: Optional[str] = "weights/EfficientNetB1_triplet.pth"):
+    def __init__(
+        self, weights_path: Optional[str] = "weights/EfficientNetB1_triplet.pth"
+    ):
         super().__init__(weights_path=weights_path)
         self.name = "efficientnetb1_triplet"
 
     def _build_model(self, weights_path: Optional[str]) -> nn.Module:
         if weights_path and os.path.exists(weights_path):
-            print(f"Loading fine-tuned EfficientNetB1 Triplet weights from: {weights_path}")
+            print(
+                f"Loading fine-tuned EfficientNetB1 Triplet weights from: {weights_path}"
+            )
             model = efficientnet_b1(weights=None)
             try:
                 state_dict = torch.load(weights_path, map_location=self.device)
@@ -579,12 +587,15 @@ class EfficientNetB1TripletExtractor(EfficientNetB1Extractor):
                 # Filter out classifier weights because of dimension mismatch
                 # (128 vs 1000)
                 filtered_state_dict = {
-                    k: v for k, v in state_dict.items()
+                    k: v
+                    for k, v in state_dict.items()
                     if not k.startswith("classifier.")
                 }
 
                 model.load_state_dict(filtered_state_dict, strict=False)
-                print("✓ Fine-tuned EfficientNetB1 Triplet weights loaded successfully (classifier excluded)")
+                print(
+                    "✓ Fine-tuned EfficientNetB1 Triplet weights loaded successfully (classifier excluded)"
+                )
             except Exception as e:
                 print(f"Warning: Failed to load weights: {e}")
                 print("Using ImageNet pretrained weights instead")
@@ -601,6 +612,7 @@ class EfficientNetB1TripletExtractor(EfficientNetB1Extractor):
 # Vision Transformer (ViT) Implementation for CellViT/SAM/ViT-256
 # ============================================================================
 
+
 class PatchEmbed(nn.Module):
     """Image to Patch Embedding for ViT."""
 
@@ -609,7 +621,9 @@ class PatchEmbed(nn.Module):
         self.img_size = img_size
         self.patch_size = patch_size
         self.num_patches = (img_size // patch_size) ** 2
-        self.proj = nn.Conv2d(in_chans, embed_dim, kernel_size=patch_size, stride=patch_size)
+        self.proj = nn.Conv2d(
+            in_chans, embed_dim, kernel_size=patch_size, stride=patch_size
+        )
 
     def forward(self, x):
         x = self.proj(x).flatten(2).transpose(1, 2)
@@ -631,7 +645,11 @@ class Attention(nn.Module):
 
     def forward(self, x):
         B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
+        qkv = (
+            self.qkv(x)
+            .reshape(B, N, 3, self.num_heads, C // self.num_heads)
+            .permute(2, 0, 3, 1, 4)
+        )
         q, k, v = qkv[0], qkv[1], qkv[2]
         attn = (q @ k.transpose(-2, -1)) * self.scale
         attn = attn.softmax(dim=-1)
@@ -666,10 +684,18 @@ class MLP(nn.Module):
 class TransformerBlock(nn.Module):
     """Transformer Block."""
 
-    def __init__(self, dim, num_heads, mlp_ratio=4.0, qkv_bias=False, drop=0.0, attn_drop=0.0):
+    def __init__(
+        self, dim, num_heads, mlp_ratio=4.0, qkv_bias=False, drop=0.0, attn_drop=0.0
+    ):
         super().__init__()
         self.norm1 = nn.LayerNorm(dim)
-        self.attn = Attention(dim, num_heads=num_heads, qkv_bias=qkv_bias, attn_drop=attn_drop, proj_drop=drop)
+        self.attn = Attention(
+            dim,
+            num_heads=num_heads,
+            qkv_bias=qkv_bias,
+            attn_drop=attn_drop,
+            proj_drop=drop,
+        )
         self.norm2 = nn.LayerNorm(dim)
         mlp_hidden_dim = int(dim * mlp_ratio)
         self.mlp = MLP(in_features=dim, hidden_features=mlp_hidden_dim, drop=drop)
@@ -699,24 +725,31 @@ class VisionTransformer(nn.Module):
         super().__init__()
         self.num_features = self.embed_dim = embed_dim
 
-        self.patch_embed = PatchEmbed(img_size=img_size, patch_size=patch_size, in_chans=in_chans, embed_dim=embed_dim)
+        self.patch_embed = PatchEmbed(
+            img_size=img_size,
+            patch_size=patch_size,
+            in_chans=in_chans,
+            embed_dim=embed_dim,
+        )
         num_patches = self.patch_embed.num_patches
 
         self.cls_token = nn.Parameter(torch.zeros(1, 1, embed_dim))
         self.pos_embed = nn.Parameter(torch.zeros(1, num_patches + 1, embed_dim))
         self.pos_drop = nn.Dropout(p=drop_rate)
 
-        self.blocks = nn.ModuleList([
-            TransformerBlock(
-                dim=embed_dim,
-                num_heads=num_heads,
-                mlp_ratio=mlp_ratio,
-                qkv_bias=qkv_bias,
-                drop=drop_rate,
-                attn_drop=attn_drop_rate,
-            )
-            for _ in range(depth)
-        ])
+        self.blocks = nn.ModuleList(
+            [
+                TransformerBlock(
+                    dim=embed_dim,
+                    num_heads=num_heads,
+                    mlp_ratio=mlp_ratio,
+                    qkv_bias=qkv_bias,
+                    drop=drop_rate,
+                    attn_drop=attn_drop_rate,
+                )
+                for _ in range(depth)
+            ]
+        )
 
         self.norm = nn.LayerNorm(embed_dim)
 
@@ -773,7 +806,9 @@ class ViTExtractor(BaseDeepLearningExtractor):
         if weights_path and os.path.exists(weights_path):
             print(f"Loading ViT weights from: {weights_path}")
             try:
-                checkpoint = torch.load(weights_path, map_location='cpu', weights_only=False)
+                checkpoint = torch.load(
+                    weights_path, map_location="cpu", weights_only=False
+                )
 
                 if "model" in checkpoint:
                     state_dict = checkpoint["model"]
@@ -783,7 +818,9 @@ class ViTExtractor(BaseDeepLearningExtractor):
                     state_dict = checkpoint
 
                 # Remove classification head if present
-                state_dict = {k: v for k, v in state_dict.items() if not k.startswith("head")}
+                state_dict = {
+                    k: v for k, v in state_dict.items() if not k.startswith("head")
+                }
 
                 model.load_state_dict(state_dict, strict=False)
                 print(f"✓ ViT weights loaded successfully ({self.weights_type})")
@@ -791,7 +828,9 @@ class ViTExtractor(BaseDeepLearningExtractor):
                 print(f"Warning: Failed to load ViT weights: {e}")
                 print("Using random initialization")
         else:
-            print(f"No pretrained weights found at {weights_path}. Using random initialization.")
+            print(
+                f"No pretrained weights found at {weights_path}. Using random initialization."
+            )
 
         return model
 
@@ -841,7 +880,11 @@ class ViT256DinoExtractor(ViTExtractor):
 class ViTFinetunedExtractor(ViTExtractor):
     """ViT extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
 
-    def __init__(self, weights_path: str = "weights/ViT_CellViT_finetuned.pth", weights_type: str = "vit256_dino"):
+    def __init__(
+        self,
+        weights_path: str = "weights/ViT_CellViT_finetuned.pth",
+        weights_type: str = "vit256_dino",
+    ):
         super().__init__(weights_path=weights_path, weights_type=weights_type)
         # Override name to match the vector name in Qdrant
         self.name = "ViT_finetuned"

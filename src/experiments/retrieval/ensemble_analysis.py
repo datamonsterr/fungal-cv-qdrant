@@ -1435,8 +1435,9 @@ def regenerate_prediction_with_details(
 
     Note: This uses the single collection 'myco_fungi_features_full' with named vectors.
     """
-    from src.experiments.retrieval.run import predict
     from qdrant_client import QdrantClient
+
+    from src.experiments.retrieval.run import predict
 
     # Single collection with multiple named vectors
     COLLECTION_NAME = "myco_fungi_features_full"
@@ -1967,7 +1968,9 @@ def main():
         print("  - ensemble_results_manual_weighted.json")
     print("  - complementary_cases/ (detailed visualizations)")
     print("    * resnet_only/ (cases where ResNet50 correct, ColorHistogramHS wrong)")
-    print("    * efficient_only/ (cases where EfficientNetV2B0 correct, ColorHistogramHS wrong)")
+    print(
+        "    * efficient_only/ (cases where EfficientNetV2B0 correct, ColorHistogramHS wrong)"
+    )
     print("    * wrong_colorhistogramhs/ (all ColorHistogramHS wrong cases)")
 
 

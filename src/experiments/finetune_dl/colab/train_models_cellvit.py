@@ -52,13 +52,14 @@ from torchvision import transforms
 from tqdm import tqdm
 
 # Suppress TPU transparent hugepages warning (performance optimization, not critical)
-warnings.filterwarnings('ignore', message='.*transparent_hugepage.*')
+warnings.filterwarnings("ignore", message=".*transparent_hugepage.*")
 
 # TPU support
 try:
     import torch_xla
     import torch_xla.core.xla_model as xm
     import torch_xla.distributed.parallel_loader as pl
+
     TPU_AVAILABLE = True
 except ImportError:
     TPU_AVAILABLE = False
@@ -109,7 +110,9 @@ TARGET_SIZE = (HEIGHT, WIDTH)
 # Pretrained Weights Configuration
 # Choose one of: "cellvit_x20", "cellvit_x40", "sam_vit_b", "sam_vit_l", "sam_vit_h",
 #                "vit256_dino", or None for random initialization
-PRETRAINED_WEIGHTS_CHOICE = "vit256_dino"  # Change this to switch between weight options
+PRETRAINED_WEIGHTS_CHOICE = (
+    "vit256_dino"  # Change this to switch between weight options
+)
 
 # TPU Configuration
 USE_TPU = True  # Set to True to use TPU if available
@@ -413,7 +416,9 @@ def get_vit_model(
             # Always load checkpoint on CPU first, then move to target device
             # weights_only=False is required for checkpoints containing numpy objects
             # Only use this for trusted checkpoints (CellViT, SAM, DINO from official sources)
-            checkpoint = torch.load(pretrained_path, map_location='cpu', weights_only=False)
+            checkpoint = torch.load(
+                pretrained_path, map_location="cpu", weights_only=False
+            )
 
             # Handle different checkpoint formats
             if "model" in checkpoint:
@@ -539,7 +544,7 @@ def train_model(
                 desc=f"{phase:5s}",
                 leave=False,
                 position=1,
-                disable=use_tpu  # Disable for TPU to avoid clutter
+                disable=use_tpu,  # Disable for TPU to avoid clutter
             )
 
             for inputs, labels in batch_pbar:
@@ -559,7 +564,9 @@ def train_model(
 
                         # Gradient clipping to prevent exploding gradients
                         if grad_clip > 0:
-                            torch.nn.utils.clip_grad_norm_(model.parameters(), grad_clip)
+                            torch.nn.utils.clip_grad_norm_(
+                                model.parameters(), grad_clip
+                            )
 
                         if use_tpu and TPU_AVAILABLE:
                             xm.optimizer_step(optimizer)  # TPU-specific optimizer step
@@ -572,11 +579,12 @@ def train_model(
                 # Update batch progress bar with current metrics
                 if not use_tpu:
                     current_loss = running_loss / ((batch_pbar.n + 1) * inputs.size(0))
-                    current_acc = running_corrects.double() / ((batch_pbar.n + 1) * inputs.size(0))
-                    batch_pbar.set_postfix({
-                        'loss': f'{current_loss:.4f}',
-                        'acc': f'{current_acc:.4f}'
-                    })
+                    current_acc = running_corrects.double() / (
+                        (batch_pbar.n + 1) * inputs.size(0)
+                    )
+                    batch_pbar.set_postfix(
+                        {"loss": f"{current_loss:.4f}", "acc": f"{current_acc:.4f}"}
+                    )
 
             epoch_loss = running_loss / len(dataloaders[phase].dataset)  # type: ignore[arg-type]
             epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)  # type: ignore[union-attr,arg-type]
@@ -587,31 +595,39 @@ def train_model(
 
             if phase == "train":
                 history["loss"].append(epoch_loss)
-                history["accuracy"].append(epoch_acc.item() if torch.is_tensor(epoch_acc) else epoch_acc)
+                history["accuracy"].append(
+                    epoch_acc.item() if torch.is_tensor(epoch_acc) else epoch_acc
+                )
 
                 # Get current learning rate
-                current_lr = optimizer.param_groups[0]['lr']
+                current_lr = optimizer.param_groups[0]["lr"]
 
-                epoch_pbar.set_postfix({
-                    'train_loss': f'{epoch_loss:.4f}',
-                    'train_acc': f'{epoch_acc:.4f}',
-                    'lr': f'{current_lr:.6f}'
-                })
+                epoch_pbar.set_postfix(
+                    {
+                        "train_loss": f"{epoch_loss:.4f}",
+                        "train_acc": f"{epoch_acc:.4f}",
+                        "lr": f"{current_lr:.6f}",
+                    }
+                )
             else:
                 history["val_loss"].append(epoch_loss)
-                history["val_accuracy"].append(epoch_acc.item() if torch.is_tensor(epoch_acc) else epoch_acc)
+                history["val_accuracy"].append(
+                    epoch_acc.item() if torch.is_tensor(epoch_acc) else epoch_acc
+                )
 
                 # Get current learning rate
-                current_lr = optimizer.param_groups[0]['lr']
+                current_lr = optimizer.param_groups[0]["lr"]
 
-                epoch_pbar.set_postfix({
-                    'train_loss': f'{history["loss"][-1]:.4f}',
-                    'train_acc': f'{history["accuracy"][-1]:.4f}',
-                    'val_loss': f'{epoch_loss:.4f}',
-                    'val_acc': f'{epoch_acc:.4f}',
-                    'best': f'{best_acc:.4f}',
-                    'lr': f'{current_lr:.6f}'
-                })
+                epoch_pbar.set_postfix(
+                    {
+                        "train_loss": f'{history["loss"][-1]:.4f}',
+                        "train_acc": f'{history["accuracy"][-1]:.4f}',
+                        "val_loss": f"{epoch_loss:.4f}",
+                        "val_acc": f"{epoch_acc:.4f}",
+                        "best": f"{best_acc:.4f}",
+                        "lr": f"{current_lr:.6f}",
+                    }
+                )
 
                 if epoch_acc > best_acc:
                     best_acc = epoch_acc
@@ -626,7 +642,9 @@ def train_model(
             scheduler.step()
 
         if epochs_no_improve >= patience:
-            tqdm.write(f"\n⚠ Early stopping triggered after {epochs_no_improve} epochs without improvement")
+            tqdm.write(
+                f"\n⚠ Early stopping triggered after {epochs_no_improve} epochs without improvement"
+            )
             break
 
     epoch_pbar.close()
@@ -794,7 +812,7 @@ def main():  # noqa: C901
 
     np.save(WEIGHTS_DIR / "classes_vit.npy", le.classes_)
 
-# Transforms with VERY STRONG augmentation optimized for circular colonies
+    # Transforms with VERY STRONG augmentation optimized for circular colonies
     # Focus on INTERNAL features (texture, color, patterns) rather than shape
     data_transforms = {
         "train": transforms.Compose(
@@ -818,17 +836,16 @@ def main():  # noqa: C901
                 ),
                 # Strong color/texture augmentation for internal features
                 transforms.ColorJitter(
-                    brightness=0.4,
-                    contrast=0.4,
-                    saturation=0.4,
-                    hue=0.2
+                    brightness=0.4, contrast=0.4, saturation=0.4, hue=0.2
                 ),
                 transforms.RandomGrayscale(p=0.15),
                 transforms.RandomApply([transforms.GaussianBlur(kernel_size=3)], p=0.2),
                 transforms.RandomAdjustSharpness(sharpness_factor=2, p=0.2),
                 transforms.ToTensor(),
                 transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-                transforms.RandomErasing(p=0.15, scale=(0.02, 0.15)),  # Simulates partial occlusion
+                transforms.RandomErasing(
+                    p=0.15, scale=(0.02, 0.15)
+                ),  # Simulates partial occlusion
             ]
         ),
         "val": transforms.Compose(
@@ -863,7 +880,9 @@ def main():  # noqa: C901
     print(f"  Augmentation multiplier: {AUGMENTATION_MULTIPLIER}x")
     print(f"  Augmented training samples: {len(image_datasets['train'])}")
     print(f"  Validation samples (no augmentation): {len(image_datasets['val'])}")
-    print(f"  Total dataset size: {len(image_datasets['train']) + len(image_datasets['val'])}")
+    print(
+        f"  Total dataset size: {len(image_datasets['train']) + len(image_datasets['val'])}"
+    )
     print("\n  Augmentation Strategy:")
     print("    - RandomResizedCrop: Focus on colony interior (50-100% crop)")
     print("    - Strong color/texture augmentation for internal features")
@@ -879,7 +898,7 @@ def main():  # noqa: C901
             batch_size=BATCH_SIZE,
             shuffle=True,
             num_workers=num_workers,
-            drop_last=True  # Recommended for TPU
+            drop_last=True,  # Recommended for TPU
         )
         for x in ["train", "val"]
     }
@@ -899,7 +918,9 @@ def main():  # noqa: C901
                 print(f"\nUsing pretrained weights: {PRETRAINED_WEIGHTS_CHOICE}")
                 print(f"Path: {pretrained_path}")
             else:
-                print(f"\nWarning: {PRETRAINED_WEIGHTS_CHOICE} weights not found at {candidate_path}")
+                print(
+                    f"\nWarning: {PRETRAINED_WEIGHTS_CHOICE} weights not found at {candidate_path}"
+                )
                 print(
                     "Download from: https://drive.google.com/drive/folders/1zFO4bgo7yvjT9rCJi_6Mt6_07wfr0CKU?usp=sharing"
                 )
@@ -909,37 +930,43 @@ def main():  # noqa: C901
             print(f"Available options: {list(PRETRAINED_WEIGHTS.keys())}")
             print("Training will proceed from random initialization.\n")
     else:
-        print("\nNo pretrained weights selected. Training from random initialization.\n")
+        print(
+            "\nNo pretrained weights selected. Training from random initialization.\n"
+        )
 
     model = get_vit_model(num_classes, device, pretrained_path)
     criterion = nn.CrossEntropyLoss()
-    optimizer = optim.AdamW(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+    optimizer = optim.AdamW(
+        model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY
+    )
 
     # Cosine Annealing with Warmup
     # Simple and effective for ViT
     warmup_scheduler = optim.lr_scheduler.LinearLR(
         optimizer,
         start_factor=0.1,  # Start at 10% of base LR
-        end_factor=1.0,    # Reach 100% of base LR
-        total_iters=WARMUP_EPOCHS
+        end_factor=1.0,  # Reach 100% of base LR
+        total_iters=WARMUP_EPOCHS,
     )
 
     cosine_scheduler = optim.lr_scheduler.CosineAnnealingLR(
-        optimizer,
-        T_max=NUM_EPOCHS - WARMUP_EPOCHS,
-        eta_min=MIN_LR
+        optimizer, T_max=NUM_EPOCHS - WARMUP_EPOCHS, eta_min=MIN_LR
     )
 
     scheduler = optim.lr_scheduler.SequentialLR(
         optimizer,
         schedulers=[warmup_scheduler, cosine_scheduler],
-        milestones=[WARMUP_EPOCHS]
+        milestones=[WARMUP_EPOCHS],
     )
 
     print("Learning Rate Schedule:")
     print(f"  Base LR: {LEARNING_RATE}")
-    print(f"  Warmup epochs: {WARMUP_EPOCHS} (linear warmup from {LEARNING_RATE*0.1:.6f} to {LEARNING_RATE})")
-    print(f"  Cosine annealing: {NUM_EPOCHS - WARMUP_EPOCHS} epochs (decay to {MIN_LR:.6f})")
+    print(
+        f"  Warmup epochs: {WARMUP_EPOCHS} (linear warmup from {LEARNING_RATE*0.1:.6f} to {LEARNING_RATE})"
+    )
+    print(
+        f"  Cosine annealing: {NUM_EPOCHS - WARMUP_EPOCHS} epochs (decay to {MIN_LR:.6f})"
+    )
     print(f"  Gradient clipping: {GRAD_CLIP}")
     print(f"  Current LR: {optimizer.param_groups[0]['lr']:.6f}\n")
 

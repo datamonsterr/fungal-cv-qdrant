@@ -8,10 +8,6 @@ import os
 
 from qdrant_client import QdrantClient
 
-from src.experiments.retrieval.run import (
-    collect_testset,
-    predict_segment_group,
-)
 from src.analysis.visualization.visualize_prediction import (
     visualize_prediction_by_environment,
 )
@@ -20,6 +16,10 @@ from src.experiments.feature_extraction.feature_extractors import (
     ColorHistogramHSExtractor,
     EfficientNetB1Extractor,
     ResNet50Extractor,
+)
+from src.experiments.retrieval.run import (
+    collect_testset,
+    predict_segment_group,
 )
 
 

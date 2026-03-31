@@ -3,7 +3,12 @@ from typing import Tuple
 
 from qdrant_client import QdrantClient
 
-from src.config import ORIGINAL_DATASET_PATH, QDRANT_API_KEY, QDRANT_URL, SEGMENTED_METADATA_PATH
+from src.config import (
+    ORIGINAL_DATASET_PATH,
+    QDRANT_API_KEY,
+    QDRANT_URL,
+    SEGMENTED_METADATA_PATH,
+)
 
 
 def check_dataset_root(path: Path = ORIGINAL_DATASET_PATH) -> Tuple[bool, str]:

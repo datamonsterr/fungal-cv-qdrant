@@ -155,9 +155,7 @@ def main():
 
     args = parser.parse_args()
 
-    extract_vit_features(
-        output_json_path=args.output, weights_type=args.weights_type
-    )
+    extract_vit_features(output_json_path=args.output, weights_type=args.weights_type)
 
 
 if __name__ == "__main__":

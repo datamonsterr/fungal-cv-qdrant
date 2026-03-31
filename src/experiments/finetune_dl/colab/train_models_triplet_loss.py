@@ -1,9 +1,9 @@
 import json
 import os
 import random
+from collections import defaultdict
 from pathlib import Path
 from typing import Dict, List, Optional, Union
-from collections import defaultdict
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,10 +36,18 @@ PROJECT_ROOT = Path(os.getenv("PROJECT_ROOT", _default_root))
 DATASET_ROOT = Path(os.getenv("DATASET_ROOT", PROJECT_ROOT / "Dataset"))
 WEIGHTS_DIR = Path(os.getenv("WEIGHTS_DIR", PROJECT_ROOT / "weights"))
 RESULTS_DIR = Path(os.getenv("RESULTS_DIR", PROJECT_ROOT / "results"))
-SEGMENTED_IMAGE_DIR = Path(os.getenv("SEGMENTED_IMAGE_DIR", DATASET_ROOT / "segmented_image"))
-HIERARCHICAL_DATASET_PATH = Path(os.getenv("HIERARCHICAL_DATASET_PATH", DATASET_ROOT / "hierarchical"))
-SEGMENTED_METADATA_PATH = Path(os.getenv("SEGMENTED_METADATA_PATH", DATASET_ROOT / "segmented_image_metadata.json"))
-STRAIN_SPECIES_MAPPING_PATH = Path(os.getenv("STRAIN_SPECIES_MAPPING_PATH", DATASET_ROOT / "strain_to_specy.csv"))
+SEGMENTED_IMAGE_DIR = Path(
+    os.getenv("SEGMENTED_IMAGE_DIR", DATASET_ROOT / "segmented_image")
+)
+HIERARCHICAL_DATASET_PATH = Path(
+    os.getenv("HIERARCHICAL_DATASET_PATH", DATASET_ROOT / "hierarchical")
+)
+SEGMENTED_METADATA_PATH = Path(
+    os.getenv("SEGMENTED_METADATA_PATH", DATASET_ROOT / "segmented_image_metadata.json")
+)
+STRAIN_SPECIES_MAPPING_PATH = Path(
+    os.getenv("STRAIN_SPECIES_MAPPING_PATH", DATASET_ROOT / "strain_to_specy.csv")
+)
 
 # Image Params
 HEIGHT = 256
@@ -57,7 +65,13 @@ class TripletFungiDataset(Dataset):
     """
     Returns triplets: (anchor, positive, negative) + label
     """
-    def __init__(self, image_paths: List[str], labels: Union[List[int], np.ndarray], transform=None):
+
+    def __init__(
+        self,
+        image_paths: List[str],
+        labels: Union[List[int], np.ndarray],
+        transform=None,
+    ):
         self.image_paths = image_paths
         self.labels = labels
         self.transform = transform
@@ -107,7 +121,9 @@ class TripletFungiDataset(Dataset):
 # ============================================================================
 # 2. EfficientNet Embedding Model
 # ============================================================================
-def get_efficientnet_embedding_model(embedding_dim: int, device: torch.device) -> nn.Module:
+def get_efficientnet_embedding_model(
+    embedding_dim: int, device: torch.device
+) -> nn.Module:
     """Builds EfficientNetB1 replacing the head with an embedding layer."""
     model = efficientnet_b1(weights=EfficientNet_B1_Weights.DEFAULT)
 
@@ -141,7 +157,7 @@ def train_triplet_model(
 ) -> Dict[str, List[float]]:
 
     history = {"loss": [], "val_loss": []}
-    best_loss = float('inf')
+    best_loss = float("inf")
     epochs_no_improve = 0
 
     for epoch in range(num_epochs):
@@ -185,7 +201,7 @@ def train_triplet_model(
                 running_loss += loss.item() * anchor.size(0)
 
                 # Update progress bar
-                pbar.set_postfix({'loss': loss.item()})
+                pbar.set_postfix({"loss": loss.item()})
 
             epoch_loss = running_loss / len(dataloaders[phase].dataset)
             print(f"{phase} Loss: {epoch_loss:.4f}")
@@ -266,12 +282,20 @@ def main():
             continue
 
         # Logic to find image path (hierarchical -> flat fallback)
-        segment_suffix = image_id.split("_")[-1] if parent_id and "_" in image_id else "0"
+        segment_suffix = (
+            image_id.split("_")[-1] if parent_id and "_" in image_id else "0"
+        )
         clean_strain = strain.replace(" ", "_").replace("/", "-")
-        hierarchical_filename = f"{clean_strain}_{environment}_{angle}_seg{segment_suffix}.jpg"
+        hierarchical_filename = (
+            f"{clean_strain}_{environment}_{angle}_seg{segment_suffix}.jpg"
+        )
 
         hierarchical_path = (
-            HIERARCHICAL_DATASET_PATH / species / strain / environment / hierarchical_filename
+            HIERARCHICAL_DATASET_PATH
+            / species
+            / strain
+            / environment
+            / hierarchical_filename
         )
 
         if hierarchical_path.exists():
@@ -303,29 +327,37 @@ def main():
 
     # --- Transforms ---
     data_transforms = {
-        "train": transforms.Compose([
-            transforms.Resize((HEIGHT, WIDTH)),
-            transforms.RandomHorizontalFlip(),
-            transforms.RandomRotation(10),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ]),
-        "val": transforms.Compose([
-            transforms.Resize((HEIGHT, WIDTH)),
-            transforms.ToTensor(),
-            transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
-        ]),
+        "train": transforms.Compose(
+            [
+                transforms.Resize((HEIGHT, WIDTH)),
+                transforms.RandomHorizontalFlip(),
+                transforms.RandomRotation(10),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
+        ),
+        "val": transforms.Compose(
+            [
+                transforms.Resize((HEIGHT, WIDTH)),
+                transforms.ToTensor(),
+                transforms.Normalize([0.485, 0.456, 0.406], [0.229, 0.224, 0.225]),
+            ]
+        ),
     }
 
     # --- Datasets (Triplet) ---
     # Using the new TripletFungiDataset class
     image_datasets = {
-        "train": TripletFungiDataset(train_paths, train_labels, data_transforms["train"]),
+        "train": TripletFungiDataset(
+            train_paths, train_labels, data_transforms["train"]
+        ),
         "val": TripletFungiDataset(val_paths, val_labels, data_transforms["val"]),
     }
 
     dataloaders = {
-        x: DataLoader(image_datasets[x], batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
+        x: DataLoader(
+            image_datasets[x], batch_size=BATCH_SIZE, shuffle=True, num_workers=2
+        )
         for x in ["train", "val"]
     }
 

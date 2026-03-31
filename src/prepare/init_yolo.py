@@ -38,7 +38,9 @@ def parse_filename(filename: str) -> dict[str, str]:
     return {"strain": "unknown", "environment": "unknown", "angle": "unknown"}
 
 
-def bboxes_to_yolo(bboxes: list[dict[str, int]], img_w: int, img_h: int) -> list[dict[str, Any]]:
+def bboxes_to_yolo(
+    bboxes: list[dict[str, int]], img_w: int, img_h: int
+) -> list[dict[str, Any]]:
     annotations: list[dict[str, Any]] = []
     for label_id, bbox in enumerate(bboxes):
         x_min, y_min = bbox["xmin"], bbox["ymin"]
@@ -93,7 +95,9 @@ def contour_bboxes(preprocessed: Any) -> list[dict[str, int]]:
     bboxes: list[dict[str, int]] = []
     for cnt in selected:
         x, y, w, h = cv2.boundingRect(cnt)
-        bboxes.append({"xmin": int(x), "ymin": int(y), "xmax": int(x + w), "ymax": int(y + h)})
+        bboxes.append(
+            {"xmin": int(x), "ymin": int(y), "xmax": int(x + w), "ymax": int(y + h)}
+        )
     return bboxes
 
 

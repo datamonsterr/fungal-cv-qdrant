@@ -329,18 +329,21 @@ def visualize_prediction_by_environment(
         text_font,
         text_color,
     )
-    current_y = _draw_legend(
-        draw,
-        aggregated_results,
-        ground_truth,
-        padding,
-        header_y + 8,
-        canvas_width,
-        text_font,
-        small_font,
-        text_color,
-        padding,
-    ) + 16
+    current_y = (
+        _draw_legend(
+            draw,
+            aggregated_results,
+            ground_truth,
+            padding,
+            header_y + 8,
+            canvas_width,
+            text_font,
+            small_font,
+            text_color,
+            padding,
+        )
+        + 16
+    )
 
     for result in raw_results_sorted:
         query_id = result["query_image_id"]

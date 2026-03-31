@@ -164,7 +164,9 @@ def plot_fold_variance(fold_acc: pd.DataFrame, out: Path) -> None:
     ax.set_xticks(x_positions)
     ax.set_xticklabels([f"K={k}" for k in K_VALUES])
     ax.set_ylabel("Accuracy (per fold)", fontsize=12)
-    ax.set_title("Fold Accuracy Distribution by K — EfficientNetB1_finetuned", fontsize=13)
+    ax.set_title(
+        "Fold Accuracy Distribution by K — EfficientNetB1_finetuned", fontsize=13
+    )
     ax.set_ylim(0, 1.1)
     ax.grid(True, axis="y", linestyle="--", alpha=0.5)
     fig.tight_layout()
@@ -179,9 +181,7 @@ def plot_fold_variance(fold_acc: pd.DataFrame, out: Path) -> None:
 
 
 def plot_heatmap(summary: pd.DataFrame, out: Path) -> None:
-    pivot = summary.pivot_table(
-        index="setting", columns="k", values="mean_accuracy"
-    )
+    pivot = summary.pivot_table(index="setting", columns="k", values="mean_accuracy")
     # Ensure row order
     ordered_rows = [s for s in SETTING_ORDER if s in pivot.index]
     pivot = pivot.loc[ordered_rows]
@@ -202,9 +202,13 @@ def plot_heatmap(summary: pd.DataFrame, out: Path) -> None:
             if not np.isnan(val):
                 text_color = "black" if 0.35 < val < 0.85 else "white"
                 ax.text(
-                    col_i, row_i, f"{val:.2f}",
-                    ha="center", va="center",
-                    fontsize=10, color=text_color,
+                    col_i,
+                    row_i,
+                    f"{val:.2f}",
+                    ha="center",
+                    va="center",
+                    fontsize=10,
+                    color=text_color,
                 )
 
     ax.set_title("Mean Accuracy: (env × strategy) vs K", fontsize=13)
@@ -236,16 +240,21 @@ def plot_env_comparison(summary: pd.DataFrame, out: Path) -> None:
     env_colors = {"E1": "#1f77b4", "E2": "#2ca02c"}
     for ei, env in enumerate(["E1", "E2"]):
         sub = env_agg[env_agg["env_strategy"] == env].set_index("agg_strategy")
-        vals = [sub.loc[s, "mean_accuracy"] if s in sub.index else 0 for s in strategies]
+        vals = [
+            sub.loc[s, "mean_accuracy"] if s in sub.index else 0 for s in strategies
+        ]
         offset = (ei - n_envs / 2 + 0.5) * bar_w
         bars = ax.bar(
-            x + offset, vals, bar_w,
-            label=env, color=env_colors[env], alpha=0.8
+            x + offset, vals, bar_w, label=env, color=env_colors[env], alpha=0.8
         )
         for b, v in zip(bars, vals):
             ax.text(
-                b.get_x() + b.get_width() / 2, b.get_height() + 0.01,
-                f"{v:.2f}", ha="center", va="bottom", fontsize=9,
+                b.get_x() + b.get_width() / 2,
+                b.get_height() + 0.01,
+                f"{v:.2f}",
+                ha="center",
+                va="bottom",
+                fontsize=9,
             )
 
     ax.set_xticks(x)
