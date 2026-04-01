@@ -88,7 +88,7 @@ def visualize_strain_with_extractor(
         min_samples=None,
         without_siblings=True,
         environment="all",  # E2 strategy
-        strategy="avg",
+        strategy="weighted",
     )
 
     # Create visualization

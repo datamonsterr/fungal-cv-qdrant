@@ -128,7 +128,7 @@ def aggregate_predictions(
     strain_to_specy: Dict[str, str],
     k: int,
     min_samples: Optional[int] = None,
-    strategy: str = "avg",
+    strategy: str = "weighted",
 ) -> List[Tuple[str, float]]:
     """Aggregate per-segment neighbors into strain-level species ranking."""
     del k
@@ -156,7 +156,7 @@ def aggregate_predictions(
     total_neighbors = sum(species_counts.values())
 
     for specy, total_score in species_scores.items():
-        if strategy == "avg":
+        if strategy == "weighted":
             final_score = total_score / total_neighbors if total_neighbors > 0 else 0.0
         elif strategy == "uni":
             count = species_counts[specy]
@@ -203,7 +203,7 @@ def predict(
     min_samples: Optional[int] = None,
     without_siblings: bool = True,
     environment: Optional[str] = None,
-    strategy: str = "avg",
+    strategy: str = "weighted",
     strain_to_specy_path: str = str(STRAIN_SPECIES_MAPPING_PATH),
     segmented_image_dir: str = str(SEGMENTED_IMAGE_DIR),
     output_dir: str = str(RESULTS_DIR),
@@ -395,7 +395,7 @@ def write_evaluation_csv(
     else:
         media_label = str(environment)
 
-    agg_label = "weighted" if strategy == "avg" else strategy
+    agg_label = "weighted" if strategy == "weighted" else strategy
 
     max_rank = max(len(r.get("aggregated_results", [])) for r in results)
 
@@ -609,7 +609,7 @@ def predict_segment_group(
     min_samples: Optional[int] = None,
     without_siblings: bool = True,
     environment: Optional[str] = None,
-    strategy: str = "avg",
+    strategy: str = "weighted",
     strain_to_specy_path: str = str(STRAIN_SPECIES_MAPPING_PATH),
 ) -> Dict[str, Any]:
     """Predict species from a provided segment group (one strain test split)."""
@@ -704,7 +704,7 @@ def run_species_evaluation(
     min_samples: int = None,
     without_siblings: bool = True,
     environment: str = None,
-    strategy: str = "avg",
+    strategy: str = "weighted",
     output_dir: str = str(RESULTS_DIR),
     generate_visualizations: bool = False,
     selected_strains: Optional[Dict[str, str]] = None,
@@ -964,7 +964,9 @@ def _build_parser() -> argparse.ArgumentParser:
         ],
     )
     comprehensive.add_argument("--env_strategies", nargs="+", default=["E1", "E2"])
-    comprehensive.add_argument("--agg_strategies", nargs="+", default=["avg", "uni"])
+    comprehensive.add_argument(
+        "--agg_strategies", nargs="+", default=["weighted", "uni"]
+    )
     comprehensive.add_argument("--k", type=int, default=5)
     comprehensive.add_argument("--max_visualizations", type=int, default=20)
     comprehensive.add_argument(

@@ -171,13 +171,19 @@ def find_result_file(
         base_dir: Base results directory
         feature_extractor: Feature extractor name
         env_strategy: Environment strategy (E1, E2, E3_xxx)
-        agg_strategy: Aggregation strategy (S1 for avg, S2 for uni)
+        agg_strategy: Aggregation strategy (S1 for weighted, S2 for uni)
 
     Returns:
         Path to JSON file or None if not found
     """
     # Map S1/S2 to AVG/UNI
-    agg_map = {"S1": "AVG", "S2": "UNI", "avg": "AVG", "uni": "UNI"}
+    agg_map = {
+        "S1": "WEIGHTED",
+        "S2": "UNI",
+        "avg": "WEIGHTED",
+        "weighted": "WEIGHTED",
+        "uni": "UNI",
+    }
     agg_folder = agg_map.get(agg_strategy, agg_strategy.upper())
 
     folder_name = f"{feature_extractor}_{env_strategy}_{agg_folder}"
@@ -1459,7 +1465,7 @@ def regenerate_prediction_with_details(
     # Run prediction with full details
     k = metadata.get("k", 7)
     environment = metadata.get("environment", "all")
-    strategy = metadata.get("strategy", "avg")
+    strategy = metadata.get("strategy", "weighted")
 
     result = predict(
         query_strain=strain,

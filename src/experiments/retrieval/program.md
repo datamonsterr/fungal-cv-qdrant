@@ -21,7 +21,7 @@ uv run python -m src.experiments.retrieval.run comprehensive \
   --identifier run_001 \
   --extractors resnet50 mobilenetv2 efficientnetv2 hog gabor colorhistogram \
   --env_strategies E1 E2 \
-  --agg_strategies avg uni \
+  --agg_strategies weighted uni \
   --k 5
 ```
 

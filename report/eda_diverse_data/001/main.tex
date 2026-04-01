@@ -1,0 +1,82 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{float}
+\usepackage{booktabs}
+\title{EDA: Diverse Data Reorganization}
+\author{Myco Fungi Project}
+\date{2026-03-31}
+
+\begin{document}
+\maketitle
+
+\section{Overview}
+Exploratory data analysis of new fungal species images from \texttt{Dataset/new\_data} and reorganization into hierarchical structure at \texttt{Dataset/diverse\_data/}.
+
+\section{Source Data}
+\begin{itemize}
+\item \textbf{Source:} \texttt{Dataset/new\_data/} organized by letter ranges (A-L, M-R, S-Z)
+\item \textbf{Total images:} 652
+\item \textbf{Species count:} 45
+\end{itemize}
+
+\section{Target Structure}
+\begin{verbatim}
+Dataset/diverse_data/
+└── images/
+    └── {species}/
+        └── {environment}/
+            ├── {Strain}_{angle}_{id}.jpg          (preprocessed)
+            ├── {Strain}_{angle}_{id}_bboxes.jpg   (bbox viz)
+            └── {Strain}_{angle}_{id}_seg{n}.jpg   (segments)
+└── diverse_data_metadata.json
+\end{verbatim}
+
+\section{Processing Results}
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+Metric & Count \\
+\midrule
+Images processed & 651 \\
+Bbox visualization images & 651 \\
+Segmented colonies & 1,037 \\
+Corrupted source files skipped & 1 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Environment Distribution}
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+Environment & Samples \\
+\midrule
+CYA & 146 \\
+MEA & 146 \\
+YES & 116 \\
+DG18 & 122 \\
+CREA & 108 \\
+OA & 10 \\
+CYAS & 2 \\
+UNKNOWN & 2 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{JSON Metadata Schema}
+Each image entry includes:
+\begin{itemize}
+\item \texttt{id}: Unique identifier
+\item \texttt{file\_path}: Path to preprocessed image
+\item \texttt{bboxes\_image}: Path to image with bounding boxes
+\item \texttt{data}: Object containing species, strain, environment, angle
+\item \texttt{bboxes}: Array of $\{xmin, ymin, xmax, ymax\}$ objects
+\item \texttt{num\_colonies}: Number of colonies detected
+\item \texttt{segment\_paths}: Array of paths to segmented colony images
+\end{itemize}
+
+\end{document}

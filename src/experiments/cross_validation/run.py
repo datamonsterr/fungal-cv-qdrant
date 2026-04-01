@@ -4,7 +4,7 @@
 Rotates the test strain across all strains for each species (round-robin).
 Fixed extractor: EfficientNetB1_finetuned
 Env strategies : [None/E1, "all"/E2]
-Agg strategies : ["uni", "avg" (weighted)]
+Agg strategies : ["weighted", "uni"]
 K values       : [3, 5, 7, 9, 11]
 Total runs     : 5 folds × 2 env × 2 agg × 5 K = 100
 
@@ -14,6 +14,8 @@ each run, so the job is safe to interrupt and resume — already-completed
 
 Parallel execution: within each fold, all (env × agg × k) combos run concurrently
 using ThreadPoolExecutor. Progress is displayed via tqdm.
+
+For the simpler single-config experiment runner, see ``src/lib/cross_validation.py``.
 """
 
 from __future__ import annotations
@@ -37,6 +39,9 @@ from src.config import (
     SEGMENTED_IMAGE_DIR,
     STRAIN_SPECIES_MAPPING_PATH,
 )
+
+# Re-use fold generation from shared library
+from src.lib.cross_validation import generate_cv_folds as _lib_generate_cv_folds
 
 # ---------------------------------------------------------------------------
 # Constants
@@ -64,7 +69,7 @@ CV_RESULTS_FIELDS = [
 N_FOLDS = 5
 K_VALUES = [3, 5, 7, 9, 11]
 ENV_STRATEGIES: List[Optional[str]] = [None, "all"]  # E1, E2
-AGG_STRATEGIES = ["uni", "avg"]  # uni = uniform, avg = score-weighted
+AGG_STRATEGIES = ["uni", "weighted"]  # uni = uniform, weighted = score-weighted
 
 # Thread-safe CSV write lock
 _csv_lock = threading.Lock()
@@ -79,38 +84,8 @@ def generate_cv_folds(
     csv_path: Path = STRAIN_SPECIES_MAPPING_PATH,
     n_folds: int = N_FOLDS,
 ) -> List[Dict[str, str]]:
-    """
-    Return a list of *n_folds* dicts, each mapping ``{species: strain}``.
-
-    The strains for each species are sorted alphabetically and assigned to
-    folds via round-robin (``strain[fold_idx % len(strains)]``).
-    Species that have fewer strains than *n_folds* will repeat earlier strains
-    in later folds — this matches the task specification (\"fold 5 reuses fold
-    1's test strain for 4-strain species\").
-    """
-    if not csv_path.exists():
-        raise FileNotFoundError(
-            f"Strain mapping CSV not found at {csv_path}. "
-            "Run 'uv run python -m src.utils.generate_strain_mapping' first."
-        )
-
-    df = pd.read_csv(csv_path)
-    species_to_strains: Dict[str, List[str]] = defaultdict(list)
-    for _, row in df.iterrows():
-        species_to_strains[row["Species"]].append(row["Strain"])
-
-    # Sort each species' strains for deterministic fold assignment
-    for sp in species_to_strains:
-        species_to_strains[sp].sort()
-
-    folds: List[Dict[str, str]] = []
-    for fold_idx in range(n_folds):
-        fold: Dict[str, str] = {}
-        for species, strains in species_to_strains.items():
-            fold[species] = strains[fold_idx % len(strains)]
-        folds.append(fold)
-
-    return folds
+    """Delegate to shared library implementation."""
+    return _lib_generate_cv_folds(csv_path=csv_path, n_folds=n_folds)
 
 
 # ---------------------------------------------------------------------------

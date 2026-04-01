@@ -123,7 +123,7 @@ def regenerate_prediction_with_details(
     # Run prediction with full details
     k = metadata.get("k", 7)
     environment = metadata.get("environment", "all")
-    strategy = metadata.get("strategy", "avg")
+    strategy = metadata.get("strategy", "weighted")
 
     result = predict(
         query_strain=strain,
