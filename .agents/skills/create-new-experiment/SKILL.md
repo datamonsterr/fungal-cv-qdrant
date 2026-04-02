@@ -175,6 +175,35 @@ This runs:
 4. Experiment-specific checks
 5. Then runs `src/run.py`
 
+## Plot — Staircase Chart Conventions
+
+The autoresearch plot (`results/autoresearch/{experiment}.png`) follows these rules:
+
+**Single-float accuracy per attempt** (most experiments):
+- X-axis: experiment attempt number
+- Y-axis: accuracy (0.0–1.0)
+- Gray dots: discarded results (worse than running best)
+- Green circles: new best at that attempt
+- Staircase green line: horizontal segments at each new best level
+
+**Multi-experiment experiments** (e.g. threshold — many individual formula × algorithm pairs):
+- When `accuracy` is a JSON dict (multiple strategy-algorithm F1s per attempt), ALL individual
+  experiments are plotted as dots, NOT colored lines.
+- X-axis: experiment index (each formula × algorithm = one dot)
+- Gray dots: f1 ≤ running best (discarded)
+- Green dots: f1 > running best (new staircase step-up)
+- Green staircase: horizontal segments connecting green dots in chronological order
+- Labels on green dots: `{formula}_{algorithm}` (truncated to 25 chars)
+- The threshold experiment reads from `results/{experiment}/log/all_experiments.csv`
+
+**Rules for `ExperimentHistory.add()`**:
+- Compare with `round(value, 6)` to avoid floating-point noise
+- `kept="1"` only when the new accuracy beats the previous best (strict `>`)
+- When accuracy is a dict, use `max(dict.values())` for the "best accuracy" comparison
+- `accuracy` field in CSV stores: plain float string (e.g. `"0.089965"`) OR JSON dict string (e.g. `'{"geom_mean_top3_roc_opt": 0.164}'`)
+
+**Mixed historical rows**: If some rows are plain float and others are dicts, the plotting code handles both — dict rows contribute their per-key values, plain float rows are skipped for keys they don't have.
+
 ## File Checklist
 
 - [ ] `src/experiments/{name}/program.md`
