@@ -1,0 +1,18 @@
+\BOOKMARK [1][-]{section.1}{Objective}{}% 1
+\BOOKMARK [1][-]{section.2}{Datasets}{}% 2
+\BOOKMARK [2][-]{subsection.2.1}{Database \(Qdrant collection\)}{section.2}% 3
+\BOOKMARK [2][-]{subsection.2.2}{Query / Test set}{section.2}% 4
+\BOOKMARK [2][-]{subsection.2.3}{Known species}{section.2}% 5
+\BOOKMARK [1][-]{section.3}{Query Construction}{}% 6
+\BOOKMARK [1][-]{section.4}{Why Autoresearch?}{}% 7
+\BOOKMARK [1][-]{section.5}{Methodology Diagram}{}% 8
+\BOOKMARK [1][-]{section.6}{Experiment History}{}% 9
+\BOOKMARK [1][-]{section.7}{Best Strategies \(Top-5\)}{}% 10
+\BOOKMARK [1][-]{section.8}{Confusion Matrices}{}% 11
+\BOOKMARK [1][-]{section.9}{Formula Family Analysis}{}% 12
+\BOOKMARK [2][-]{subsection.9.1}{Ratio-chain family}{section.9}% 13
+\BOOKMARK [2][-]{subsection.9.2}{Spread / diversity family}{section.9}% 14
+\BOOKMARK [1][-]{section.10}{Key Insights}{}% 15
+\BOOKMARK [1][-]{section.11}{Future Directions}{}% 16
+\BOOKMARK [1][-]{section.12}{Autoresearch Staircase}{}% 17
+\BOOKMARK [1][-]{section.13}{Supporting Visualisations}{}% 18

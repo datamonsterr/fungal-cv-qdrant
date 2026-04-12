@@ -1,0 +1,72 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "minimax-coding-plan/MiniMax-M2.7",
+  "default_agent": "autoresearch",
+  "autoupdate": true,
+  "mcp": {
+    "serena": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "."
+      ],
+      "enabled": true
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true
+    }
+  },
+  "agent": {
+    "autoresearch": {
+      "description": "Autoresearch loop agent for fungal classification experiments",
+      "mode": "primary",
+      "model": "minimax-coding-plan/MiniMax-M2.7",
+      "temperature": 0.1,
+      "steps": 20
+    },
+    "prepare": {
+      "description": "Scaffolds new experiment folders with program.md, prepare.py, run_accuracy.py",
+      "mode": "subagent",
+      "model": "minimax-coding-plan/MiniMax-M2.7",
+      "temperature": 0.1,
+      "steps": 10
+    },
+    "explore": {
+      "description": "Fast read-only agent for exploring codebases",
+      "mode": "subagent",
+      "tools": {
+        "read": true,
+        "grep": true,
+        "glob": true,
+        "list": true,
+        "edit": false,
+        "bash": false
+      }
+    }
+  },
+  "permission": "allow",
+  "instructions": [
+    ".opencode/rules/experiment-visualization.md",
+    ".opencode/rules/branch-naming.md"
+  ],
+  "watcher": {
+    "ignore": [
+      "**/__pycache__/**",
+      "**/.git/**",
+      "**/node_modules/**",
+      "**/results/**",
+      "**/.venv/**"
+    ]
+  },
+  "compaction": {
+    "auto": true,
+    "prune": true,
+    "reserved": 12000
+  }
+}

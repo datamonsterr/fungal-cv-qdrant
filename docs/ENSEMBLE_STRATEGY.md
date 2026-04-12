@@ -1,66 +1,50 @@
 # Ensemble Strategy Reference
 
+> **Note:** The `weighted` strategy was previously called `avg` in older code. All new code should use `weighted` (score-weighted) and `uni` (uniform count). See [`docs/TERMINOLOGY.md`](docs/TERMINOLOGY.md) for full definitions.
+
 ## Aggregation Strategies
 
-| Strategy | Description |
-|----------|-------------|
-| `weighted` / `score` / `avg` | Score-weighted: each model's vote is proportional to its overall accuracy |
-| `uni` | Uniform: all models vote equally |
-| `manual_weighted` | Per-species weights from `species_weights.json` |
+| Strategy | Aliases | Description |
+|----------|---------|-------------|
+| `weighted` | `score` | Score-weighted by cosine similarity — high-similarity neighbours have more influence |
+| `uni` | `uniform`, `count` | Uniform count — each neighbour contributes equally (1/k) |
+| `manual_weighted` | — | Per-species weights from `species_weights.json` on top of `weighted` |
 
-## Accuracy-Based Weights (auto-computed)
-
-The `weighted` strategy normalizes each model's accuracy so all weights sum to 1.0:
+## Score-Weighted Math (`weighted`)
 
 ```
-normalized_weight = model_accuracy / sum(all_accuracies)
+species_score[s] = Σ  cosine_similarity(neighbour_i)   for all neighbours where neighbour_i.species == s
+prediction = argmax_s species_score[s]
 ```
 
-Example with 3 models:
-| Model | Accuracy | Normalized Weight |
-|-------|----------|------------------|
-| ColorHistogramHS | 75.00% | 38.71% |
-| ResNet50 | 66.67% | 34.41% |
-| EfficientNetV2B0 | 52.08% | 26.88% |
+## Uniform Count Math (`uni`)
 
-Higher accuracy → higher voting power. The 38.71% is **not** the model's accuracy — it's its share of decision power.
+```
+species_count[s] = Σ  1   for all neighbours where neighbour_i.species == s
+prediction = argmax_s species_count[s]
+```
+
+## Accuracy-Based Weights
+
+When combining multiple extractors:
+```
+normalized_weight = model_accuracy / Σ(all_model_accuracies)
+```
 
 ## Manual Per-Species Weights (`species_weights.json`)
 
-Allows fine-grained control when specific models excel or fail for specific species:
+Allows fine-grained control per species per extractor:
+- `1.0` = standard trust
+- `< 1.0` = reduced influence
+- `0.0` = completely disable that model for this species
 
+Example:
 ```json
 {
-  "weights": {
-    "Penicillium cyclopium": {
-      "ColorHistogramHS": 0.3,
-      "ResNet50": 1.0,
-      "EfficientNetB1_finetuned": 0.9
-    },
-    "default": {
-      "ColorHistogramHS": 1.0,
-      "ResNet50": 1.0,
-      "EfficientNetB1_finetuned": 1.0
-    }
+  "Penicillium commune": {
+    "ResNet50_finetuned": 1.2,
+    "EfficientNetB1_finetuned": 0.8,
+    "ResNet50_finetuned": 0.0
   }
 }
 ```
-
-- `1.0` = standard trust; `< 1.0` = reduce influence; `0.0` = disable for this species
-- Species not listed fall back to `"default"` weights
-- Score combination: `sum(model_score × species_weight[species][model])`
-
-### Tuning workflow
-
-1. Run evaluation and inspect `results/` for per-species failure patterns
-2. Lower weights for consistently failing models per species
-3. Re-run and compare against `weighted` / `uni` baselines
-4. Avoid over-tuning on the test set
-
-## Comparison
-
-| Strategy | Pros | Cons |
-|----------|------|------|
-| `weighted` | Automatic, data-driven | Ignores species-specific strengths |
-| `uni` | Simple, no tuning | Treats all models equally |
-| `manual_weighted` | Fine-grained domain control | Requires manual tuning, overfitting risk |

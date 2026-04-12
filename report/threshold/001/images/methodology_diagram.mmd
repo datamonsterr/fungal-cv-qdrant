@@ -1,0 +1,25 @@
+flowchart TD
+    A["Query plate image<br/>(1–3 colonies)"] --> B["SEGMENTATION<br/>KMeans / contour<br/>1–3 segments per plate"]
+
+    B --> C["FEATURE EXTRACTION<br/>EfficientNetB1_finetuned<br/>1280-d embedding per segment"]
+
+    C --> D["QDRANT KNN RETRIEVAL<br/>k=11, E1 strategy<br/>Same growth medium only<br/>Named vector: EfficientNetB1_finetuned"]
+
+    D --> E["SIBLING FILTERING<br/>Remove same-plate neighbours<br/>to avoid redundancy"]
+
+    E --> F["SCORE EXTRACTION<br/>Record top-5 cosine similarities<br/>s₀ … s₄ + species labels<br/>results/threshold/diverse_retrieval_results.csv"]
+
+    F --> G["THRESHOLD ANALYSIS<br/>102–800 formula variants<br/>3 threshold algorithms<br/>f1_grid | roc_opt | otsu"]
+
+    G --> H["BEST FORMULA<br/>wtd_rat_halving + roc_opt<br/>F1 = 0.4587<br/>Threshold T"]
+
+    H --> I{"score = wtd_rat_halving(s₀,…,s₄)<br/>≥ T ?"}
+
+    I -->|"YES ≥ T"| J["ACCEPT<br/>Predicted: Known species<br/>Top predicted species"]
+    I -->|"NO < T"| K["REJECT<br/>Predicted: Unknown species"]
+
+    style A fill:#e1f5fe
+    style J fill:#c8e6c9
+    style K fill:#ffcdd2
+    style G fill:#fff9c4
+    style H fill:#c8e6c9

@@ -1,0 +1,33 @@
+# Results — Threshold Experiment (Best Run)
+
+## Overall Best: wtd_rat_halving + roc_opt
+- **F1**: 0.4587
+- **Precision**: 0.3185
+- **Recall**: 0.8190
+- **Specificity**: 0.4347
+- **TP**: 172 / FP**: 368 / **TN**: 283 / **FN**: 38
+- **Threshold**: 58,988,000,007.48 (cosine similarity scale)
+- **AUROC**: 0.6673
+
+## Previous Best: rat01_p_rat12 + roc_opt (attempt 5)
+- **F1**: 0.4536
+- **Precision**: 0.3180
+- **Recall**: 0.7905
+- **Specificity**: 0.4531
+- **TP**: 166 / FP**: 356 / **TN**: 295 / **FN**: 44
+- **Threshold**: 117,976,000,007.48
+
+## Improvement
+- F1 delta: +0.0051 (+1.1% relative)
+- Recall improved: 0.7905 → 0.8190 (+2.9pp)
+- Precision nearly unchanged: 0.3180 → 0.3185
+- Specificity slightly lower: 0.4531 → 0.4347
+
+## Experiment counts per attempt
+- Attempt 1: 25 formulas × 1 algorithm = 25 experiments
+- Attempt 2: 25 formulas × 5 algorithms = 125 experiments
+- Attempt 3: 571 experiments (expansion phase, no improvement)
+- Attempt 4: ~100 formulas × 5 algorithms = ~500 (labels corrected)
+- Attempt 5: 810 experiments
+- Attempt 6 (this run): 102 formulas × 3 algorithms = 306 experiments
+- **Total logged: 2362 experiments across all attempts**

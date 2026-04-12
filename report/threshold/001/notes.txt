@@ -1,0 +1,26 @@
+# Notes — Threshold Experiment
+
+## Attempt 4 label bug
+The dramatic jump from F1~0.09 to F1~0.45 between attempts 3 and 4 was caused by
+correcting the `is_known` field encoding. Previously, unknown species were labelled
+as known=1 and vice versa, which inverted the classification signal.
+
+## Why so many FP?
+The high false-positive rate (368 FP vs 172 TP in best run) is the central challenge.
+Unknown species produce top neighbour scores that are nearly as high as known species
+because:
+- The fine-tuned EfficientNetB1 was trained only on 5 species → poor generalisation.
+- Unknown species may share visual features (colony texture, colour, morphology).
+- E1 strategy restricts to same environment, reducing cross-env variation but also
+  reducing the diversity of the neighbour pool.
+
+## Alternative directions not yet explored
+- Train a separate binary classifier on top of retrieval features rather than threshold.
+- Use top-1 species prediction confidence (softmax / temperature scaling) as signal.
+- Ensemble multiple extractors (ResNet50_finetuned + MobileNetV2_finetuned) for
+  retrieval before threshold.
+
+## Formula naming reference
+- `wtd_rat_halving` = 1.0*(s0/s1) + 0.5*(s1/s2) + 0.25*(s2/s3) + 0.125*(s3/s4)
+- `spread_012_ov_s0` = (std(top3) / mean(top3)) / s0
+- `rat01_p_rat12_m_rat23` = (s0/s1) + (s1/s2) − (s2/s3)

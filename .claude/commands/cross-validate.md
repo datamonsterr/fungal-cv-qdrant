@@ -1,19 +1,8 @@
-Run or resume cross-validation (100 runs) and visualize results.
+Run or resume cross-validation and visualize results.
 
-Make sure Qdrant is running first:
 ```bash
-docker compose up -d
+uv run python -m src.experiments.cross_validation.run --collection myco_fungi_features_full_finetuned
+uv run python -m src.experiments.cross_validation.visualize
 ```
 
-**Run cross-validation** (safe to interrupt and resume — results append to CSV):
-```bash
-uv run python src/main.py cross-validate \
-  --collection myco_fungi_features_full_finetuned
-```
-
-**Visualize results after completion:**
-```bash
-uv run python src/main.py cross-validate-visualize
-```
-
-Results are written to `results/cross_validation/`.
+Results are written under results/ and report artifacts.

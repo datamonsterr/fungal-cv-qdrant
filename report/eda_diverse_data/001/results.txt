@@ -1,0 +1,3 @@
+652 images processed
+45 species
+1,037 segmented colonies extracted

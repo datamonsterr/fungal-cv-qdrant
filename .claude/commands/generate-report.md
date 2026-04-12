@@ -1,26 +1,34 @@
-Generate a structured research report for a phase of work, following the project's Definition of Done.
+Generate or update an experiment report via the `research-report` skill.
 
 ## Usage
 
 Run this command and provide:
-- **Phase/week folder** (e.g. `week_1_2`, `week_3_4`)
-- Optional: a specific DOD file path (defaults to `report/<folder>/report_dod.md`)
+- **Experiment name** (e.g. `cross_validation`, `kmeans_segmentation`)
+- **Report number** (e.g. `001`, `r1`, `2026-03-28`)
+- Optional: a specific content context path (defaults to `report/<exp_name>/<report_number>/content.md`)
 
 ## What the agent will do
 
-1. Read the DOD from `report/<folder>/report_dod.md` or `report/<folder>/tasks.prompt.md`
-2. Gather context: `git log`, changed files, results CSVs, existing visualizations
-3. Write a complete report to `report/<folder>/REPORT.md` covering:
-   - Overview (problem intro, glossary, purpose)
-   - Methodology (fold design, split rationale, Mermaid diagrams)
-   - Implementation (pipeline brief, script block diagram)
-   - Results (comparison table, best config analysis, sensitivity)
-   - Conclusion (recommendation)
+1. Ensure report structure exists under `report/<exp_name>/<report_number>/`:
+	- `content.md`
+	- `notes.txt`
+	- `results.txt`
+	- `images/README.md`
+	- `main.tex`
+2. Read context from `report/<exp_name>/<report_number>/content.md`
+3. Gather context: `git log`, changed files, results CSVs, existing visualizations
+4. Write or update `report/<exp_name>/<report_number>/main.tex`
+5. Render and validate LaTeX with:
+	`uv run python report/render_report.py --report-dir report/<exp_name>/<report_number>`
 
 ## Invocation
 
-Use the `research-report` skill to execute this workflow. When invoked, ask the user for the target folder if not already clear from context.
+Use the `research-report` skill to execute this workflow. Ask for target folder if not clear.
+
+Validation behavior:
+- Default render validates LaTeX (`pdflatex -halt-on-error`)
+- Optional fallback: `--skip-validate` if the user explicitly requests non-blocking render
 
 Example:
-- "generate report for week_1_2" → writes `report/week_1_2/REPORT.md`
-- "write the CV report" → infers `report/week_1_2/` from tasks.prompt.md
+- "generate report for cross_validation report 001" → updates `report/cross_validation/001/main.tex`
+- "write segmentation report r2" → updates `report/kmeans_segmentation/r2/main.tex`
