@@ -35,7 +35,14 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 import cv2
 
-from src.config import DATASET_ROOT, QDRANT_URL, QDRANT_API_KEY, SEGMENTED_IMAGE_DIR
+from src.config import (
+    DATASET_ROOT,
+    QDRANT_API_KEY,
+    QDRANT_URL,
+    RESULTS_DIR,
+    WORKSPACE_ROOT,
+    SEGMENTED_IMAGE_DIR,
+)
 from src.experiments.feature_extraction.feature_extractors import (
     EfficientNetB1FinetunedExtractor,
 )
@@ -65,7 +72,7 @@ except ImportError:
 # ---------------------------------------------------------------------------
 
 DIVERSE_METADATA_PATH = DATASET_ROOT / "diverse_data" / "diverse_data_metadata.json"
-OUTPUT_DIR = PROJECT_ROOT / "results" / "threshold"
+OUTPUT_DIR = RESULTS_DIR / "threshold"
 OUTPUT_CSV = OUTPUT_DIR / "diverse_retrieval_results.csv"
 VIS_OUTPUT_DIR = OUTPUT_DIR / "diverse_retrieval_visualizations"
 JSON_OUTPUT_DIR = OUTPUT_DIR / "diverse_retrieval_json"
@@ -213,7 +220,7 @@ def build_diverse_segment_candidates(
             continue
 
         for segment_index, segment_path_rel in enumerate(segment_paths):
-            segment_path = PROJECT_ROOT / segment_path_rel
+            segment_path = WORKSPACE_ROOT / segment_path_rel
             if not segment_path.exists():
                 print(
                     f"  SKIP {strain}/{source_id}: segment not found at {segment_path}"

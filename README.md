@@ -1,11 +1,21 @@
 # Myco Fungi Multi-Research Workflow
 
 This repository now follows a multi-experiment autoresearch-style layout.
-Core code remains under src/, with per-experiment checks colocated under each experiment folder.
+Core code remains under `src/`, with per-experiment checks colocated under each experiment folder.
+
+This repository is expected to live inside the parent monorepo at `/home/dat/dev/mycoai/`.
+Shared runtime paths now live outside this submodule:
+
+- `../Dataset/`
+- `../results/`
+- `../weights/`
+- `../species_weights.json`
+
+`src/config.py` resolves those parent-level paths automatically when this repository is used as the `fungal-cv-qdrant/` submodule.
 
 ## High-Level Workflow
 
-1. Put raw data in Dataset/original/
+1. Put raw data in `../Dataset/original/`
 2. Run prepare bootstrap
 3. Run one or more experiment programs
 4. Run immutable checks from each experiment package
@@ -23,50 +33,52 @@ Core code remains under src/, with per-experiment checks colocated under each ex
 
 ## Canonical Commands
 
+Run these commands from the monorepo root with `uv --directory fungal-cv-qdrant ...`.
+
 ### 1) Full Preparation (Dataset/original -> Qdrant)
 
 ```bash
-uv run python -m src.prepare.init --collection myco_fungi_features_full
+uv --directory fungal-cv-qdrant run python -m src.prepare.init --collection myco_fungi_features_full
 ```
 
 ### 2) Generate Mapping Only
 
 ```bash
-uv run python -m src.utils.generate_strain_mapping
+uv --directory fungal-cv-qdrant run python -m src.utils.generate_strain_mapping
 ```
 
 ### 3) Extract Features Only
 
 ```bash
-uv run python -m src.experiments.feature_extraction.generate_features
+uv --directory fungal-cv-qdrant run python -m src.experiments.feature_extraction.generate_features
 ```
 
 ### 4) Unified Upload (single JSON)
 
 ```bash
-uv run python -m src.utils.upload_qdrant \
-  --features-json Dataset/segmented_features.json \
-  --metadata-json Dataset/segmented_image_metadata.json \
+uv --directory fungal-cv-qdrant run python -m src.utils.upload_qdrant \
+  --features-json ../Dataset/segmented_features.json \
+  --metadata-json ../Dataset/segmented_image_metadata.json \
   --collection myco_fungi_features_full
 ```
 
 ### 5) Cross Validation
 
 ```bash
-uv run python -m src.experiments.cross_validation.run --collection myco_fungi_features_full_finetuned
-uv run python -m src.experiments.cross_validation.visualize
+uv --directory fungal-cv-qdrant run python -m src.experiments.cross_validation.run --collection myco_fungi_features_full_finetuned
+uv --directory fungal-cv-qdrant run python -m src.experiments.cross_validation.visualize
 ```
 
 ### 6) Finetune DL
 
 ```bash
-uv run python -m src.experiments.finetune_dl.train_models
+uv --directory fungal-cv-qdrant run python -m src.experiments.finetune_dl.train_models
 ```
 
 ### 7) Lint / Type Check
 
 ```bash
-uv run black src && uv run isort src && uv run flake8 src && uv run mypy src
+uv --directory fungal-cv-qdrant run black src && uv --directory fungal-cv-qdrant run isort src && uv --directory fungal-cv-qdrant run flake8 src && uv --directory fungal-cv-qdrant run mypy src
 ```
 
 ## Colab
@@ -74,7 +86,7 @@ uv run black src && uv run isort src && uv run flake8 src && uv run mypy src
 Use src/colab_config.py to print a one-cell setup snippet:
 
 ```bash
-uv run python -m src.colab_config
+uv --directory fungal-cv-qdrant run python -m src.colab_config
 ```
 
 Colab assets are under src/experiments/finetune_dl/colab/.

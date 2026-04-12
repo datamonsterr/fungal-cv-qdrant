@@ -11,7 +11,7 @@ from qdrant_client import QdrantClient
 from src.analysis.visualization.visualize_prediction import (
     visualize_prediction_by_environment,
 )
-from src.config import SEGMENTED_IMAGE_DIR
+from src.config import RESULTS_DIR, SEGMENTED_IMAGE_DIR
 from src.experiments.feature_extraction.feature_extractors import (
     ColorHistogramHSExtractor,
     EfficientNetB1Extractor,
@@ -26,7 +26,10 @@ from src.experiments.retrieval.run import (
 def load_complementary_cases():
     """Load the list of complementary cases from the analysis."""
     cases_file = (
-        "./results/ensemble_analysis/complementary_cases/complementary_cases_list.json"
+        RESULTS_DIR
+        / "ensemble_analysis"
+        / "complementary_cases"
+        / "complementary_cases_list.json"
     )
 
     with open(cases_file, "r") as f:
@@ -119,7 +122,7 @@ def main():
     # Configuration
     CLIENT = QdrantClient(host="localhost", port=6333)
     COLLECTION_NAME = "myco_fungi_features_full"
-    OUTPUT_BASE_DIR = "./results/ensemble_analysis/complementary_cases"
+    OUTPUT_BASE_DIR = RESULTS_DIR / "ensemble_analysis" / "complementary_cases"
     K = 7
 
     # Load complementary cases
@@ -132,9 +135,9 @@ def main():
     print()
 
     # Create output directories
-    resnet_dir = os.path.join(OUTPUT_BASE_DIR, "resnet_only")
-    efficient_dir = os.path.join(OUTPUT_BASE_DIR, "efficient_only")
-    wrong_dir = os.path.join(OUTPUT_BASE_DIR, "wrong_colorhistogramhs")
+    resnet_dir = os.path.join(str(OUTPUT_BASE_DIR), "resnet_only")
+    efficient_dir = os.path.join(str(OUTPUT_BASE_DIR), "efficient_only")
+    wrong_dir = os.path.join(str(OUTPUT_BASE_DIR), "wrong_colorhistogramhs")
 
     os.makedirs(resnet_dir, exist_ok=True)
     os.makedirs(efficient_dir, exist_ok=True)

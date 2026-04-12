@@ -19,7 +19,13 @@ from typing import Dict, List, Any
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import QDRANT_URL, QDRANT_API_KEY
+from src.config import (
+    DATASET_ROOT,
+    QDRANT_API_KEY,
+    QDRANT_URL,
+    RESULTS_DIR,
+    WORKSPACE_ROOT,
+)
 import os
 
 _qdrant_url = QDRANT_URL
@@ -27,10 +33,12 @@ if not os.getenv("QDRANT_URL") or "cloud.qdrant" in _qdrant_url:
     _qdrant_url = "http://localhost:6333"
 
 import cv2
-from src.experiments.feature_extraction.feature_extractors import EfficientNetB1FinetunedExtractor
+from src.experiments.feature_extraction.feature_extractors import (
+    EfficientNetB1FinetunedExtractor,
+)
 from qdrant_client import QdrantClient
 
-DIVERSE_METADATA_PATH = PROJECT_ROOT / "Dataset/diverse_data/diverse_data_metadata.json"
+DIVERSE_METADATA_PATH = DATASET_ROOT / "diverse_data" / "diverse_data_metadata.json"
 COLLECTION = "myco_fungi_features_full_finetuned"
 EXTRACTOR_KEY = "EfficientNetB1_finetuned"
 
@@ -107,8 +115,7 @@ def run():
 
     # Filter to known species only (we only care about checking their scores)
     known_images = [
-        img for img in images
-        if is_known(img.get("data", {}).get("species", ""))
+        img for img in images if is_known(img.get("data", {}).get("species", ""))
     ]
     print(f"Known samples: {len(known_images)}")
 
@@ -121,17 +128,19 @@ def run():
         data = img_info.get("data", {})
         species = data.get("species", "")
         environment = data.get("environment", "")
-        img_path_rel = img_info.get("step_images", {}).get("preprocessed") or img_info.get("file_path", "")
+        img_path_rel = img_info.get("step_images", {}).get(
+            "preprocessed"
+        ) or img_info.get("file_path", "")
         if not img_path_rel:
             continue
-        img_path = PROJECT_ROOT / img_path_rel
+        img_path = WORKSPACE_ROOT / img_path_rel
         if not img_path.exists():
             continue
 
         db_species = map_to_db(species)
         step_images = img_info.get("step_images", {})
         original_rel = step_images.get("original") or img_info.get("file_path", "")
-        original_path = PROJECT_ROOT / original_rel
+        original_path = WORKSPACE_ROOT / original_rel
         if not original_path.exists():
             continue
 
@@ -139,18 +148,26 @@ def run():
         env_filter = None
         if environment not in ("UNKNOWN", ""):
             env_filter = Filter(
-                must=[FieldCondition(key="environment", match=MatchValue(value=environment))]
+                must=[
+                    FieldCondition(
+                        key="environment", match=MatchValue(value=environment)
+                    )
+                ]
             )
 
         # Retrieve with E1 (same env) at k=3, k=5, k=11
         for k in [3, 5, 11]:
-            neighbors_e1 = retrieve_with_k(client, extractor, img_path, k=k, env_filter=env_filter)
+            neighbors_e1 = retrieve_with_k(
+                client, extractor, img_path, k=k, env_filter=env_filter
+            )
             if neighbors_e1 is None:
                 continue
             ranked_e1 = aggregate_weighted(neighbors_e1)
 
             # Retrieve with E2 (no filter) at k=3, k=5, k=11
-            neighbors_e2 = retrieve_with_k(client, extractor, img_path, k=k, env_filter=None)
+            neighbors_e2 = retrieve_with_k(
+                client, extractor, img_path, k=k, env_filter=None
+            )
             ranked_e2 = aggregate_weighted(neighbors_e2)
 
             # Geometric mean top-3 for both
@@ -158,14 +175,14 @@ def run():
             gm3_e1 = 0.0
             if len(ranked_e1) >= 3:
                 s = [ranked_e1[i]["score"] for i in range(3)]
-                gm3_e1 = (s[0] * s[1] * s[2]) ** (1/3)
+                gm3_e1 = (s[0] * s[1] * s[2]) ** (1 / 3)
             elif len(ranked_e1) >= 2:
                 gm3_e1 = (ranked_e1[0]["score"] * ranked_e1[1]["score"]) ** 0.5
 
             gm3_e2 = 0.0
             if len(ranked_e2) >= 3:
                 s = [ranked_e2[i]["score"] for i in range(3)]
-                gm3_e2 = (s[0] * s[1] * s[2]) ** (1/3)
+                gm3_e2 = (s[0] * s[1] * s[2]) ** (1 / 3)
             elif len(ranked_e2) >= 2:
                 gm3_e2 = (ranked_e2[0]["score"] * ranked_e2[1]["score"]) ** 0.5
 
@@ -175,23 +192,25 @@ def run():
             correct_e1 = pred_e1 == db_species
             correct_e2 = pred_e2 == db_species
 
-            results_rows.append({
-                "species": species,
-                "environment": environment,
-                "db_species": db_species,
-                "k": k,
-                "pred_e1": pred_e1,
-                "pred_e2": pred_e2,
-                "correct_e1": correct_e1,
-                "correct_e2": correct_e2,
-                "gm3_e1": gm3_e1,
-                "gm3_e2": gm3_e2,
-                "s0_e1": ranked_e1[0]["score"] if ranked_e1 else 0.0,
-                "s0_e2": ranked_e2[0]["score"] if ranked_e2 else 0.0,
-            })
+            results_rows.append(
+                {
+                    "species": species,
+                    "environment": environment,
+                    "db_species": db_species,
+                    "k": k,
+                    "pred_e1": pred_e1,
+                    "pred_e2": pred_e2,
+                    "correct_e1": correct_e1,
+                    "correct_e2": correct_e2,
+                    "gm3_e1": gm3_e1,
+                    "gm3_e2": gm3_e2,
+                    "s0_e1": ranked_e1[0]["score"] if ranked_e1 else 0.0,
+                    "s0_e2": ranked_e2[0]["score"] if ranked_e2 else 0.0,
+                }
+            )
 
     # Save full comparison
-    output_path = PROJECT_ROOT / "results" / "threshold" / "e1_vs_e2_comparison.csv"
+    output_path = RESULTS_DIR / "threshold" / "e1_vs_e2_comparison.csv"
     with open(output_path, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=list(results_rows[0].keys()))
         writer.writeheader()
@@ -200,10 +219,14 @@ def run():
     # Summary
     print(f"\nSaved comparison to {output_path}")
     print()
-    print(f"{'species':12s} {'env':6s} {'k':3s} {'correct_E1':10s} {'correct_E2':10s} {'gm3_E1':8s} {'gm3_E2':8s} {'s0_E1':8s} {'s0_E2':8s}")
+    print(
+        f"{'species':12s} {'env':6s} {'k':3s} {'correct_E1':10s} {'correct_E2':10s} {'gm3_E1':8s} {'gm3_E2':8s} {'s0_E1':8s} {'s0_E2':8s}"
+    )
     print("-" * 90)
     for r in results_rows:
-        print(f"{r['species']:12s} {r['environment']:6s} {r['k']:3d} {str(r['correct_e1']):10s} {str(r['correct_e2']):10s} {r['gm3_e1']:8.4f} {r['gm3_e2']:8.4f} {r['s0_e1']:8.4f} {r['s0_e2']:8.4f}")
+        print(
+            f"{r['species']:12s} {r['environment']:6s} {r['k']:3d} {str(r['correct_e1']):10s} {str(r['correct_e2']):10s} {r['gm3_e1']:8.4f} {r['gm3_e2']:8.4f} {r['s0_e1']:8.4f} {r['s0_e2']:8.4f}"
+        )
 
     # Count improvements
     e1_correct = sum(1 for r in results_rows if r["correct_e1"])

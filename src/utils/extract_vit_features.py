@@ -16,7 +16,7 @@ from typing import List
 
 import cv2
 
-from src.config import SEGMENTED_IMAGE_DIR, SEGMENTED_METADATA_PATH
+from src.config import DATASET_ROOT, SEGMENTED_IMAGE_DIR, SEGMENTED_METADATA_PATH
 from src.experiments.feature_extraction.feature_extractors import (
     ViT256DinoExtractor,
     ViTCellVitX20Extractor,
@@ -28,7 +28,7 @@ from src.experiments.feature_extraction.feature_extractors import (
 
 
 def extract_vit_features(
-    output_json_path: str = "Dataset/vit_features.json",
+    output_json_path: str = str(DATASET_ROOT / "vit_features.json"),
     weights_type: str = "vit256_dino",
 ) -> None:
     """
@@ -149,7 +149,7 @@ def main():
     parser.add_argument(
         "--output",
         type=str,
-        default="Dataset/vit_features.json",
+        default=str(DATASET_ROOT / "vit_features.json"),
         help="Output JSON file path",
     )
 

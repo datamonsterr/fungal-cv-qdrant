@@ -21,7 +21,7 @@ from typing import Any
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import QDRANT_URL, QDRANT_API_KEY
+from src.config import QDRANT_API_KEY, QDRANT_URL, RESULTS_DIR, WORKSPACE_ROOT
 import os
 
 _qdrant_url = QDRANT_URL
@@ -29,7 +29,9 @@ if not os.getenv("QDRANT_URL") or "cloud.qdrant" in _qdrant_url:
     _qdrant_url = "http://localhost:6333"
 
 import cv2
-from src.experiments.feature_extraction.feature_extractors import EfficientNetB1FinetunedExtractor
+from src.experiments.feature_extraction.feature_extractors import (
+    EfficientNetB1FinetunedExtractor,
+)
 
 try:
     from qdrant_client import QdrantClient
@@ -43,13 +45,18 @@ EXTRACTOR_KEY = "EfficientNetB1_finetuned"
 K = 11
 TOP_N = 5
 
-RETRIEVAL_LIST = PROJECT_ROOT / "results/threshold/test_strain_retrieval_list.json"
-OUTPUT_CSV = PROJECT_ROOT / "results/threshold/diverse_retrieval_results.csv"
+RETRIEVAL_LIST = RESULTS_DIR / "threshold" / "test_strain_retrieval_list.json"
+OUTPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
 
 # Test strains to EXCLUDE from Qdrant neighbors
 TEST_STRAINS = {
-    "DTO 217-D9", "DTO 470-I9", "DTO 158-D1", "DTO 148-D1",
-    "DTO 469-I5", "DTO 469-I4", "DTO 163-I2",
+    "DTO 217-D9",
+    "DTO 470-I9",
+    "DTO 158-D1",
+    "DTO 148-D1",
+    "DTO 469-I5",
+    "DTO 469-I4",
+    "DTO 163-I2",
 }
 
 CSV_FIELDS = (
@@ -135,7 +142,7 @@ def run_retrieval(resume: bool = False, limit: int = None):
             if not img_path_rel:
                 print(f"  SKIP {img_id}: no image path")
                 continue
-            img_path = PROJECT_ROOT / img_path_rel
+            img_path = WORKSPACE_ROOT / img_path_rel
             if not img_path.exists():
                 print(f"  SKIP {img_id}: image not found: {img_path}")
                 continue
@@ -184,12 +191,14 @@ def run_retrieval(resume: bool = False, limit: int = None):
                 neigh_strain = payload.get("strain", "")
                 if neigh_strain in TEST_STRAINS:
                     continue  # Exclude test strains from neighbors
-                neighbors.append({
-                    "specy": payload.get("specy", "unknown"),
-                    "score": hit.score,
-                    "strain": neigh_strain,
-                    "environment": payload.get("environment", ""),
-                })
+                neighbors.append(
+                    {
+                        "specy": payload.get("specy", "unknown"),
+                        "score": hit.score,
+                        "strain": neigh_strain,
+                        "environment": payload.get("environment", ""),
+                    }
+                )
 
             ranked = aggregate_weighted(neighbors)
 
@@ -215,7 +224,11 @@ def run_retrieval(resume: bool = False, limit: int = None):
             csvfile.flush()
 
             status = "KNOWN" if is_known else "unknown"
-            correct_mark = " OK" if (is_known and ranked and ranked[0]["species"] == species_label) else ""
+            correct_mark = (
+                " OK"
+                if (is_known and ranked and ranked[0]["species"] == species_label)
+                else ""
+            )
             s0 = float(row["s0_score"]) if row["s0_score"] else 0.0
             print(
                 f"  [{status}]{correct_mark} {species_label}/{environment} "
@@ -229,8 +242,12 @@ def run_retrieval(resume: bool = False, limit: int = None):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Retrieve diverse data excluding test strains")
-    parser.add_argument("--resume", action="store_true", help="Skip already-processed IDs")
+    parser = argparse.ArgumentParser(
+        description="Retrieve diverse data excluding test strains"
+    )
+    parser.add_argument(
+        "--resume", action="store_true", help="Skip already-processed IDs"
+    )
     parser.add_argument("--limit", type=int, default=None, help="Max images to process")
     args = parser.parse_args()
     run_retrieval(resume=args.resume, limit=args.limit)

@@ -34,12 +34,14 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-DIVERSE_DATA_ROOT = PROJECT_ROOT / "Dataset/diverse_data"
+from src.config import DATASET_ROOT, RESULTS_DIR, WORKSPACE_ROOT, relative_to_workspace
+
+DIVERSE_DATA_ROOT = DATASET_ROOT / "diverse_data"
 DIVERSE_IMAGES = DIVERSE_DATA_ROOT / "images"
 DIVERSE_METADATA_PATH = DIVERSE_DATA_ROOT / "diverse_data_metadata.json"
-SEGMENTED_META = PROJECT_ROOT / "Dataset/segmented_image_metadata.json"
-STRAIN_SPLIT_CSV = PROJECT_ROOT / "Dataset/strain_split.csv"
-OUTPUT_CSV = PROJECT_ROOT / "results/threshold/diverse_retrieval_results.csv"
+SEGMENTED_META = DATASET_ROOT / "segmented_image_metadata.json"
+STRAIN_SPLIT_CSV = DATASET_ROOT / "strain_split.csv"
+OUTPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
 OUTPUT_DIR = OUTPUT_CSV.parent
 
 # Species name mapping: DTO species name → diverse_data folder name
@@ -67,8 +69,13 @@ ENV_ALIASES = {
 
 # Test strains (hold-out, NOT in Qdrant for retrieval)
 TEST_STRAINS = {
-    "DTO 217-D9", "DTO 470-I9", "DTO 158-D1", "DTO 148-D1",
-    "DTO 469-I5", "DTO 469-I4", "DTO 163-I2",
+    "DTO 217-D9",
+    "DTO 470-I9",
+    "DTO 158-D1",
+    "DTO 148-D1",
+    "DTO 469-I5",
+    "DTO 469-I4",
+    "DTO 163-I2",
 }
 
 # Environments to copy (matching diverse_data existing envs)
@@ -139,7 +146,7 @@ def prepare_test_strain_images():
         dest_path = dest_dir / dest_name
 
         # Copy the preprocessed segment image (256x256)
-        src_path = PROJECT_ROOT / orig_path
+        src_path = WORKSPACE_ROOT / orig_path
         if src_path.exists():
             shutil.copy2(src_path, dest_path)
         else:
@@ -150,10 +157,10 @@ def prepare_test_strain_images():
         # The "preprocessed" path is what retrieval reads
         entry = {
             "id": unique_id,
-            "file_path": str(dest_path.relative_to(PROJECT_ROOT)),
+            "file_path": relative_to_workspace(dest_path),
             "step_images": {
-                "original": str(dest_path.relative_to(PROJECT_ROOT)),
-                "preprocessed": str(dest_path.relative_to(PROJECT_ROOT)),
+                "original": relative_to_workspace(dest_path),
+                "preprocessed": relative_to_workspace(dest_path),
             },
             "data": {
                 "species": folder,  # diverse_data species name
@@ -163,7 +170,7 @@ def prepare_test_strain_images():
                 "original_filename": Path(orig_path).name,
                 "bboxes": [],  # no bboxes for test strain segments
                 "num_colonies": 1,
-                "segment_paths": [str(dest_path.relative_to(PROJECT_ROOT))],
+                "segment_paths": [relative_to_workspace(dest_path)],
             },
         }
         new_entries.append(entry)
@@ -194,7 +201,9 @@ def main():
     print(f"  Total images in metadata: {len(combined['images'])}")
 
     # Save combined metadata (for reference only — retrieval reads new_entries only)
-    combined_meta_path = DIVERSE_DATA_ROOT / "diverse_data_with_test_strains_metadata.json"
+    combined_meta_path = (
+        DIVERSE_DATA_ROOT / "diverse_data_with_test_strains_metadata.json"
+    )
     with open(combined_meta_path, "w") as f:
         json.dump(combined, f, indent=2)
     print(f"  Saved combined metadata to: {combined_meta_path}")
@@ -206,20 +215,24 @@ def main():
         strain = entry["data"]["strain"]
         species = entry["data"]["species"]
         is_known = 1  # test strains = known species
-        retrieval_list.append({
-            **entry,
-            "is_known": is_known,
-            "train_in_qdrant": False,  # excluded from Qdrant during retrieval
-        })
+        retrieval_list.append(
+            {
+                **entry,
+                "is_known": is_known,
+                "train_in_qdrant": False,  # excluded from Qdrant during retrieval
+            }
+        )
 
     # Add existing diverse_data images as unknown
     existing_ids = {e["id"] for e in new_entries}
     for img in existing["images"]:
-        retrieval_list.append({
-            **img,
-            "is_known": 0,  # not a test strain = unknown
-            "train_in_qdrant": True,  # in Qdrant (train strains)
-        })
+        retrieval_list.append(
+            {
+                **img,
+                "is_known": 0,  # not a test strain = unknown
+                "train_in_qdrant": True,  # in Qdrant (train strains)
+            }
+        )
 
     print(f"  Total for retrieval: {len(retrieval_list)} images")
     known_count = sum(1 for r in retrieval_list if r["is_known"] == 1)
@@ -234,7 +247,10 @@ def main():
 
     print("\nStep 4: Summary of test strains to retrieve:")
     from collections import Counter
-    by_species = Counter(r["data"]["species"] for r in retrieval_list if r["is_known"] == 1)
+
+    by_species = Counter(
+        r["data"]["species"] for r in retrieval_list if r["is_known"] == 1
+    )
     for sp, count in sorted(by_species.items()):
         print(f"  {sp}: {count} images")
 

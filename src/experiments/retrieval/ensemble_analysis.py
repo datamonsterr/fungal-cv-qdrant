@@ -14,6 +14,8 @@ import numpy as np
 import seaborn as sns
 from pydantic import BaseModel
 
+from src.config import RESULTS_DIR, SPECIES_WEIGHTS_PATH
+
 # ========== Pydantic Models ==========
 
 
@@ -1356,7 +1358,7 @@ def evaluate_ensemble(
     print("\n[DEBUG] Ensemble evaluation complete:")
     print(f"  Total predictions: {total_predictions}")
     print(f"  Correct predictions: {correct_count}")
-    print(f"  Accuracy: {accuracy*100:.2f}%")
+    print(f"  Accuracy: {accuracy * 100:.2f}%")
     print(f"  Strategy: {combination_strategy}")
 
     # Verify all predictions have aggregated results
@@ -1405,7 +1407,7 @@ def print_ensemble_summary(ensemble_result: Dict[str, Any]):
     print(
         f"Combination Strategy: {ensemble_result.get('combination_strategy', 'weighted_sum')}"
     )
-    print(f"\nAccuracy: {ensemble_result['accuracy']*100:.2f}%")
+    print(f"\nAccuracy: {ensemble_result['accuracy'] * 100:.2f}%")
     print(
         f"Correct: {ensemble_result['correct_count']}/{ensemble_result['total_predictions']}"
     )
@@ -1423,9 +1425,9 @@ def print_ensemble_summary(ensemble_result: Dict[str, Any]):
             if p["individual_predictions"][fe]["correct"]
         )
         individual_acc = individual_correct / ensemble_result["total_predictions"]
-        print(f"{fe:25s}: {individual_acc*100:6.2f}% (weight: {weight:.4f})")
+        print(f"{fe:25s}: {individual_acc * 100:6.2f}% (weight: {weight:.4f})")
 
-    print(f"\nEnsemble                 : {ensemble_result['accuracy']*100:6.2f}%")
+    print(f"\nEnsemble                 : {ensemble_result['accuracy'] * 100:6.2f}%")
     print("=" * 80)
 
 
@@ -1650,11 +1652,11 @@ def main():
     """Main function to run ensemble analysis."""
 
     # Configuration
-    BASE_DIR = "./results/comprehensive_k7_NoSib_6"
+    BASE_DIR = str(RESULTS_DIR / "comprehensive_k7_NoSib_6")
     CSV_PATH = os.path.join(
         BASE_DIR, "comprehensive_evaluation_summary_20251211_135108.csv"
     )
-    OUTPUT_DIR = "./results/ensemble_analysis"
+    OUTPUT_DIR = str(RESULTS_DIR / "ensemble_analysis")
 
     ENV_STRATEGY = "E2"
     AGG_STRATEGY = "S1"  # AVG
@@ -1796,12 +1798,11 @@ def main():
     # Load species weights and evaluate manual weighted strategy
     print("\n" + "-" * 80)
     print("Loading species weights...")
-    SPECIES_WEIGHTS_PATH = "./species_weights.json"
     species_weights = None
     ensemble_result_manual = None
 
     if os.path.exists(SPECIES_WEIGHTS_PATH):
-        species_weights = load_species_weights(SPECIES_WEIGHTS_PATH)
+        species_weights = load_species_weights(str(SPECIES_WEIGHTS_PATH))
 
         print("\n" + "-" * 80)
         print("Evaluating ensemble model (manual weighted)...")
@@ -1837,17 +1838,17 @@ def main():
     print("STRATEGY COMPARISON")
     print("=" * 80)
     print(
-        f"\nWeighted Ensemble:       {ensemble_result_weighted['accuracy']*100:.2f}% ({ensemble_result_weighted['correct_count']}/{ensemble_result_weighted['total_predictions']})"
+        f"\nWeighted Ensemble:       {ensemble_result_weighted['accuracy'] * 100:.2f}% ({ensemble_result_weighted['correct_count']}/{ensemble_result_weighted['total_predictions']})"
     )
     print(
-        f"Simple Average Ensemble: {ensemble_result_simple['accuracy']*100:.2f}% ({ensemble_result_simple['correct_count']}/{ensemble_result_simple['total_predictions']})"
+        f"Simple Average Ensemble: {ensemble_result_simple['accuracy'] * 100:.2f}% ({ensemble_result_simple['correct_count']}/{ensemble_result_simple['total_predictions']})"
     )
     if ensemble_result_manual:
         print(
-            f"Manual Weighted Ensemble: {ensemble_result_manual['accuracy']*100:.2f}% ({ensemble_result_manual['correct_count']}/{ensemble_result_manual['total_predictions']})"
+            f"Manual Weighted Ensemble: {ensemble_result_manual['accuracy'] * 100:.2f}% ({ensemble_result_manual['correct_count']}/{ensemble_result_manual['total_predictions']})"
         )
     print(
-        f"Best Individual Model:   {max(ensemble_result_weighted['weights'].values())*100:.2f}% (ColorHistogramHS)"
+        f"Best Individual Model:   {max(ensemble_result_weighted['weights'].values()) * 100:.2f}% (ColorHistogramHS)"
     )
 
     # Determine best strategy
@@ -1859,7 +1860,9 @@ def main():
         strategies.append(("Manual Weighted", ensemble_result_manual["accuracy"]))
 
     best_strategy = max(strategies, key=lambda x: x[1])
-    print(f"\nBest Ensemble Strategy: {best_strategy[0]} ({best_strategy[1]*100:.2f}%)")
+    print(
+        f"\nBest Ensemble Strategy: {best_strategy[0]} ({best_strategy[1] * 100:.2f}%)"
+    )
 
     # Analyze differences
     diff_count = 0

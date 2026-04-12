@@ -12,10 +12,10 @@ from src.config import (
     FULL_IMAGE_METADATA_PATH,
     FULL_IMAGE_PATH,
     ORIGINAL_DATASET_PATH,
-    PROJECT_ROOT,
     SEGMENTED_IMAGE_DIR,
     SEGMENTED_METADATA_PATH,
     STRAIN_SPECIES_MAPPING_PATH,
+    relative_to_workspace,
 )
 from src.experiments.preprocessing.kmeans import segment_kmeans
 from src.experiments.preprocessing.preprocess import process_image
@@ -87,7 +87,7 @@ def _save_hierarchical_segment(
     hierarchical_dir.mkdir(parents=True, exist_ok=True)
     hierarchical_file_path = hierarchical_dir / hierarchical_filename
     cv2.imwrite(str(hierarchical_file_path), segment_img)
-    return str(hierarchical_file_path.relative_to(PROJECT_ROOT))
+    return relative_to_workspace(hierarchical_file_path)
 
 
 def _save_hierarchical_original(
@@ -110,7 +110,7 @@ def _save_hierarchical_original(
     hierarchical_dir.mkdir(parents=True, exist_ok=True)
     hierarchical_file_path = hierarchical_dir / hierarchical_filename
     shutil.copyfile(full_img_path, hierarchical_file_path)
-    return str(hierarchical_file_path.relative_to(PROJECT_ROOT))
+    return relative_to_workspace(hierarchical_file_path)
 
 
 def reformat_dataset(create_hierarchical: bool = True):
@@ -157,9 +157,7 @@ def reformat_dataset(create_hierarchical: bool = True):
                 # Copy full image
                 shutil.copyfile(original_img_path, full_img_path)
                 full_metadata = metadata.get_metadata()
-                full_metadata["file_path"] = str(
-                    full_img_path.relative_to(PROJECT_ROOT)
-                )
+                full_metadata["file_path"] = relative_to_workspace(full_img_path)
                 if create_hierarchical:
                     full_metadata["hierarchical_path"] = _save_hierarchical_original(
                         metadata=metadata,
@@ -209,9 +207,7 @@ def reformat_dataset(create_hierarchical: bool = True):
                         seg_metadata["parent_id"] = id
 
                         # Add paths
-                        seg_metadata["file_path"] = str(
-                            segment_path.relative_to(PROJECT_ROOT)
-                        )
+                        seg_metadata["file_path"] = relative_to_workspace(segment_path)
 
                         if create_hierarchical:
                             seg_metadata["hierarchical_path"] = (

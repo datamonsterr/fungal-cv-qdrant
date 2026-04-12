@@ -20,6 +20,8 @@ from torchvision.models import (
     resnet50,
 )
 
+from src.config import WEIGHTS_DIR
+
 
 def l2_normalize(features: np.ndarray) -> np.ndarray:
     """
@@ -355,7 +357,7 @@ class MobileNetV2Extractor(BaseDeepLearningExtractor):
 
     def _build_model(self, weights_path: Optional[str]) -> nn.Module:
         if weights_path and os.path.exists(weights_path):
-            print(f"Loading fine-tuned MobileNetV2 weights from: " f"{weights_path}")
+            print(f"Loading fine-tuned MobileNetV2 weights from: {weights_path}")
             model = mobilenet_v2(weights=None)
             try:
                 checkpoint = torch.load(weights_path, map_location=self.device)
@@ -476,8 +478,7 @@ def extract_features_from_dataset(
 
     print(f"Found {len(metadata_list)} images in metadata")
     print(
-        f"Applying {len(extractors)} feature extractors: "
-        f"{[e.name for e in extractors]}"
+        f"Applying {len(extractors)} feature extractors: {[e.name for e in extractors]}"
     )
 
     results: List[dict[str, Any]] = []
@@ -508,7 +509,7 @@ def extract_features_from_dataset(
             results.append(feature_data)
 
             if (idx + 1) % 10 == 0:
-                print(f"Processed {idx + 1}/{len(metadata_list)} " f"images...")
+                print(f"Processed {idx + 1}/{len(metadata_list)} images...")
 
         except Exception as e:
             print(f"Error processing {image_id}: {e}")
@@ -525,9 +526,7 @@ def extract_features_from_dataset(
 
     print("\nFeature extraction complete!")
     print(f"Processed {len(results)} images")
-    print(
-        f"Feature types: " f"{list(results[0]['features'].keys()) if results else []}"
-    )
+    print(f"Feature types: {list(results[0]['features'].keys()) if results else []}")
     print(f"Total feature dimension: {total_features}")
     print(f"Results saved to: {output_json_path}")
 
@@ -538,7 +537,10 @@ def extract_features_from_dataset(
 class ResNet50FinetunedExtractor(ResNet50Extractor):
     """ResNet50 extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
 
-    def __init__(self, weights_path: Optional[str] = "weights/ResNet50_finetuned.pth"):
+    def __init__(
+        self,
+        weights_path: Optional[str] = str(WEIGHTS_DIR / "ResNet50_finetuned.pth"),
+    ):
         super().__init__(weights_path=weights_path)
         # Override name to match the vector name in Qdrant
         self.name = "ResNet50_finetuned"
@@ -548,7 +550,8 @@ class MobileNetV2FinetunedExtractor(MobileNetV2Extractor):
     """MobileNetV2 extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
 
     def __init__(
-        self, weights_path: Optional[str] = "weights/MobileNetV2_finetuned.pth"
+        self,
+        weights_path: Optional[str] = str(WEIGHTS_DIR / "MobileNetV2_finetuned.pth"),
     ):
         super().__init__(weights_path=weights_path)
         # Override name to match the vector name in Qdrant
@@ -559,7 +562,8 @@ class EfficientNetB1FinetunedExtractor(EfficientNetB1Extractor):
     """EfficientNetB1 extractor that uses fine-tuned weights and points to fine-tuned vectors in Qdrant."""
 
     def __init__(
-        self, weights_path: Optional[str] = "weights/EfficientNetB1_finetuned.pth"
+        self,
+        weights_path: Optional[str] = str(WEIGHTS_DIR / "EfficientNetB1_finetuned.pth"),
     ):
         super().__init__(weights_path=weights_path)
         # Override name to match the vector name in Qdrant
@@ -570,7 +574,8 @@ class EfficientNetB1TripletExtractor(EfficientNetB1Extractor):
     """EfficientNetB1 extractor that uses triplet loss fine-tuned weights."""
 
     def __init__(
-        self, weights_path: Optional[str] = "weights/EfficientNetB1_triplet.pth"
+        self,
+        weights_path: Optional[str] = str(WEIGHTS_DIR / "EfficientNetB1_triplet.pth"),
     ):
         super().__init__(weights_path=weights_path)
         self.name = "efficientnetb1_triplet"
@@ -882,7 +887,7 @@ class ViTFinetunedExtractor(ViTExtractor):
 
     def __init__(
         self,
-        weights_path: str = "weights/ViT_CellViT_finetuned.pth",
+        weights_path: str = str(WEIGHTS_DIR / "ViT_CellViT_finetuned.pth"),
         weights_type: str = "vit256_dino",
     ):
         super().__init__(weights_path=weights_path, weights_type=weights_type)

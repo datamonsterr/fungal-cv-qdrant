@@ -884,9 +884,7 @@ def run_comprehensive_report(
                 if visualize_correct:
                     batch_visualize_predictions(
                         prediction_results=results,
-                        segmented_image_dir=str(
-                            Path.cwd() / "Dataset" / "segmented_image"
-                        ),
+                        segmented_image_dir=str(SEGMENTED_IMAGE_DIR),
                         output_dir=str(output_dir / "visualizations" / "correct"),
                         k=k,
                         filter_correct=True,
@@ -896,9 +894,7 @@ def run_comprehensive_report(
                 if visualize_incorrect:
                     batch_visualize_predictions(
                         prediction_results=results,
-                        segmented_image_dir=str(
-                            Path.cwd() / "Dataset" / "segmented_image"
-                        ),
+                        segmented_image_dir=str(SEGMENTED_IMAGE_DIR),
                         output_dir=str(output_dir / "visualizations" / "incorrect"),
                         k=k,
                         filter_correct=False,
@@ -921,9 +917,9 @@ def run_ensemble_report(strategy: str = "weighted") -> None:
         print_detailed_report,
     )
 
-    results_dir = "./results/ensemble_analysis"
-    json_path = f"{results_dir}/ensemble_results_{strategy}.json"
-    output_path = f"{results_dir}/detailed_comparison_{strategy}.png"
+    results_dir = RESULTS_DIR / "ensemble_analysis"
+    json_path = str(results_dir / f"ensemble_results_{strategy}.json")
+    output_path = str(results_dir / f"detailed_comparison_{strategy}.png")
 
     print(f"Loading ensemble results for strategy: {strategy}")
     results = load_ensemble_results(json_path)

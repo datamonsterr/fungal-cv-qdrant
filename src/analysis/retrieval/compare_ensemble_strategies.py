@@ -4,6 +4,8 @@ Compare weighted vs simple average ensemble strategies in detail.
 
 import json
 
+from src.config import RESULTS_DIR
+
 
 def load_ensemble_results(json_path: str):
     """Load ensemble results from JSON file."""
@@ -14,7 +16,7 @@ def load_ensemble_results(json_path: str):
 def compare_strategies():
     """Compare weighted and simple average strategies."""
 
-    RESULTS_DIR = "./results/ensemble_analysis"
+    results_dir = RESULTS_DIR / "ensemble_analysis"
 
     print("=" * 80)
     print("DETAILED STRATEGY COMPARISON")
@@ -22,10 +24,10 @@ def compare_strategies():
 
     # Load both results
     weighted_results = load_ensemble_results(
-        f"{RESULTS_DIR}/ensemble_results_weighted.json"
+        str(results_dir / "ensemble_results_weighted.json")
     )
     simple_results = load_ensemble_results(
-        f"{RESULTS_DIR}/ensemble_results_simple_avg.json"
+        str(results_dir / "ensemble_results_simple_avg.json")
     )
 
     # Find differences
@@ -57,8 +59,8 @@ def compare_strategies():
 
     print(f"\nTotal predictions: {len(weighted_results['ensemble_predictions'])}")
     print(f"Predictions that differ: {len(differences)}")
-    print(f"\nWeighted accuracy: {weighted_results['accuracy']*100:.2f}%")
-    print(f"Simple average accuracy: {simple_results['accuracy']*100:.2f}%")
+    print(f"\nWeighted accuracy: {weighted_results['accuracy'] * 100:.2f}%")
+    print(f"Simple average accuracy: {simple_results['accuracy'] * 100:.2f}%")
 
     if not differences:
         print("\nNo differences found between strategies!")
@@ -69,9 +71,9 @@ def compare_strategies():
     print("=" * 80)
 
     for i, diff in enumerate(differences, 1):
-        print(f"\n{'-'*80}")
+        print(f"\n{'-' * 80}")
         print(f"Case {i}: {diff['strain']} (Test Set {diff['test_set']})")
-        print(f"{'-'*80}")
+        print(f"{'-' * 80}")
         print(f"Ground Truth: {diff['ground_truth']}")
 
         print("\n  Individual Model Predictions:")

@@ -23,8 +23,10 @@ from PIL import Image, ImageDraw, ImageFont
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-INPUT_CSV = PROJECT_ROOT / "results" / "threshold" / "diverse_retrieval_results.csv"
-OUTPUT_DIR = PROJECT_ROOT / "results" / "threshold" / "strategy_visualizations"
+from src.config import RESULTS_DIR, WORKSPACE_ROOT
+
+INPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
+OUTPUT_DIR = RESULTS_DIR / "threshold" / "strategy_visualizations"
 
 
 # ---------------------------------------------------------------------------
@@ -32,7 +34,9 @@ OUTPUT_DIR = PROJECT_ROOT / "results" / "threshold" / "strategy_visualizations"
 # ---------------------------------------------------------------------------
 
 
-def load_results(csv_path: Path) -> Tuple[List[Dict], np.ndarray, Dict[str, np.ndarray]]:
+def load_results(
+    csv_path: Path,
+) -> Tuple[List[Dict], np.ndarray, Dict[str, np.ndarray]]:
     """
     Returns:
         rows       : list of dicts (CSV rows)
@@ -111,9 +115,11 @@ GRID_COLS = 6
 
 
 def _load_font(size: int) -> ImageFont.ImageFont:
-    for path in [f"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-                 f"/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
-                 "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"]:
+    for path in [
+        f"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        f"/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+    ]:
         if os.path.exists(path):
             return ImageFont.truetype(path, size)
     return ImageFont.load_default()
@@ -134,8 +140,10 @@ def _draw_cell(
     canvas: Image.Image,
     draw: ImageDraw.ImageDraw,
     img: Optional[Image.Image],
-    x: int, y: int,
-    w: int, h: int,
+    x: int,
+    y: int,
+    w: int,
+    h: int,
     text_lines: List[Tuple[str, ImageFont.ImageFont]],
     border_color: Tuple[int, int, int],
     border_width: int = 2,
@@ -155,13 +163,16 @@ def _draw_cell(
         canvas.paste(img_display, (img_area_x, img_area_y))
     else:
         draw.rectangle(
-            [img_area_x, img_area_y, x + w - CELL_PADDING, y + h - TEXT_HEIGHT - CELL_PADDING],
-            outline=(180, 180, 180), width=1
+            [
+                img_area_x,
+                img_area_y,
+                x + w - CELL_PADDING,
+                y + h - TEXT_HEIGHT - CELL_PADDING,
+            ],
+            outline=(180, 180, 180),
+            width=1,
         )
-        draw.text(
-            (img_area_x + 4, img_area_y + 4),
-            "Missing", fill=(140, 140, 140)
-        )
+        draw.text((img_area_x + 4, img_area_y + 4), "Missing", fill=(140, 140, 140))
 
     # Border
     draw.rectangle([x, y, x + w, y + h], outline=border_color, width=border_width)
@@ -212,15 +223,13 @@ def _make_grid(
     draw.rectangle([0, 0, grid_w, HEADER_HEIGHT], fill=color)
     draw.text((CELL_PADDING, 8), header, fill=(255, 255, 255), font=font_bold)
 
-    for idx, row in enumerate(samples[:cols * rows]):
+    for idx, row in enumerate(samples[: cols * rows]):
         col_i = idx % cols
         row_i = idx // cols
         cx = col_i * cell_w
         cy = HEADER_HEIGHT + row_i * cell_h
 
-        img_path = os.path.join(
-            PROJECT_ROOT, row.get("image_path", "")
-        )
+        img_path = str(WORKSPACE_ROOT / row.get("image_path", ""))
         img = _get_thumbnail(img_path, thumb_size)
 
         is_known = int(row.get("is_known", 0))
@@ -277,9 +286,14 @@ def visualize_strategy(
         group_rows = [rows[i] for i in idx_arr]
         group_scores = scores[idx_arr]
         panel, n = _make_grid(
-            group_rows, group_scores, threshold,
-            label_text, color, {},
-            font_bold=font_bold, font_small=font_small,
+            group_rows,
+            group_scores,
+            threshold,
+            label_text,
+            color,
+            {},
+            font_bold=font_bold,
+            font_small=font_small,
         )
         panels.append((panel, n))
 

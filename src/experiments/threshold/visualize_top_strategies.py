@@ -22,9 +22,11 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-INPUT_CSV = PROJECT_ROOT / "results" / "threshold" / "diverse_retrieval_results.csv"
-OUTPUT_DIR = PROJECT_ROOT / "results" / "threshold" / "strategy_viz"
-SEGMENTED_IMAGE_DIR = PROJECT_ROOT / "Dataset" / "diverse_data" / "images"
+from src.config import DATASET_ROOT, RESULTS_DIR
+
+INPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
+OUTPUT_DIR = RESULTS_DIR / "threshold" / "strategy_viz"
+SEGMENTED_IMAGE_DIR = DATASET_ROOT / "diverse_data" / "images"
 
 # Top strategies from expanded analysis
 TOP_STRATEGIES = [
@@ -57,7 +59,7 @@ def compute_harm3(scores: np.ndarray) -> float:
             + 1.0 / (np.maximum(scores[:, 2], eps))
         )
     s = scores
-    return 3.0 / (1.0/(s[0]+eps) + 1.0/max(s[1],eps) + 1.0/max(s[2],eps))
+    return 3.0 / (1.0 / (s[0] + eps) + 1.0 / max(s[1], eps) + 1.0 / max(s[2], eps))
 
 
 def compute_random_lin_058(scores: np.ndarray) -> float:
@@ -90,13 +92,15 @@ def build_prediction_result(
     threshold: float,
 ) -> Dict[str, Any]:
     """Build a prediction_result dict for one sample."""
-    scores = np.array([
-        float(row["s0_score"]) if row["s0_score"] else 0.0,
-        float(row["s1_score"]) if row["s1_score"] else 0.0,
-        float(row["s2_score"]) if row["s2_score"] else 0.0,
-        float(row["s3_score"]) if row["s3_score"] else 0.0,
-        float(row["s4_score"]) if row["s4_score"] else 0.0,
-    ])
+    scores = np.array(
+        [
+            float(row["s0_score"]) if row["s0_score"] else 0.0,
+            float(row["s1_score"]) if row["s1_score"] else 0.0,
+            float(row["s2_score"]) if row["s2_score"] else 0.0,
+            float(row["s3_score"]) if row["s3_score"] else 0.0,
+            float(row["s4_score"]) if row["s4_score"] else 0.0,
+        ]
+    )
 
     gm3 = compute_gm3(scores)
     s0 = scores[0]
@@ -107,10 +111,12 @@ def build_prediction_result(
         sp = row.get(f"s{i}_species", "")
         sc = row.get(f"s{i}_score", "")
         if sp:
-            neighbors.append({
-                "specy": sp,
-                "score": float(sc) if sc else 0.0,
-            })
+            neighbors.append(
+                {
+                    "specy": sp,
+                    "score": float(sc) if sc else 0.0,
+                }
+            )
 
     ground_truth = row["species_label"]
     # If known: correct if predicted == correct_species
@@ -171,7 +177,7 @@ def run_visualization():
         visualize_prediction_by_environment,
     )
 
-    for (strategy, algo, threshold, f1) in TOP_STRATEGIES:
+    for strategy, algo, threshold, f1 in TOP_STRATEGIES:
         print(f"\nVisualizing: {strategy}_{algo} (F1={f1:.4f})")
 
         # Build prediction results for all samples
@@ -225,9 +231,7 @@ def run_visualization():
                 "aggregated_results": unique_results[0]["aggregated_results"],
             }
 
-            output_path = (
-                OUTPUT_DIR / f"{strategy}_{algo}_{env}.jpg"
-            )
+            output_path = OUTPUT_DIR / f"{strategy}_{algo}_{env}.jpg"
             try:
                 visualize_prediction_by_environment(
                     prediction_result=env_pred_result,

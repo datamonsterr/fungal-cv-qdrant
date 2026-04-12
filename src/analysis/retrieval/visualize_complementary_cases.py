@@ -14,7 +14,7 @@ from typing import Any, Dict, List, Tuple
 from src.analysis.visualization.visualize_prediction import (
     visualize_prediction_by_environment,
 )
-from src.config import SEGMENTED_IMAGE_DIR
+from src.config import RESULTS_DIR, SEGMENTED_IMAGE_DIR
 from src.experiments.retrieval.run import predict
 
 
@@ -144,8 +144,8 @@ def regenerate_prediction_with_details(
 def main():
     """Main function to create complementary case visualizations."""
     # Configuration
-    results_base_dir = "./results/comprehensive_k7_NoSib_6"
-    output_base_dir = "./results/complementary_visualizations"
+    results_base_dir = RESULTS_DIR / "comprehensive_k7_NoSib_6"
+    output_base_dir = RESULTS_DIR / "complementary_visualizations"
     k = 7  # Number of neighbors to show
 
     print("=" * 80)

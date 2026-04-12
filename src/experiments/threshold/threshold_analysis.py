@@ -46,8 +46,10 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-INPUT_CSV = PROJECT_ROOT / "results" / "threshold" / "diverse_retrieval_results.csv"
-OUTPUT_DIR = PROJECT_ROOT / "results" / "threshold"
+from src.config import RESULTS_DIR
+
+INPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
+OUTPUT_DIR = RESULTS_DIR / "threshold"
 ANALYSIS_CSV = OUTPUT_DIR / "threshold_analysis.csv"
 ALL_RESULTS_CSV = OUTPUT_DIR / "all_strategy_results.csv"
 

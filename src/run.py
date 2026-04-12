@@ -28,8 +28,8 @@ from textwrap import dedent
 from typing import Any, Dict, List, Optional
 
 import matplotlib
+from src.config import PROJECT_ROOT, RESULTS_DIR
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
 import matplotlib.pyplot as plt
 
 matplotlib.use("Agg")
@@ -38,7 +38,6 @@ matplotlib.use("Agg")
 # Paths
 # ---------------------------------------------------------------------------
 
-RESULTS_DIR = Path(__file__).parent.parent / "results"
 AUTORESULTS_DIR = RESULTS_DIR / "autoresearch"
 AUTORESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -142,6 +141,7 @@ class ExperimentHistory:
             acc = r["accuracy"]
             try:
                 import json
+
                 d = json.loads(acc)
                 if isinstance(d, dict):
                     best = max(best, max(round(v, 6) for v in d.values()) if d else 0.0)
@@ -151,12 +151,15 @@ class ExperimentHistory:
                 best = max(best, round(float(acc), 6))
         return best
 
-    def add(self, accuracy: float | Dict[str, float], description: str) -> tuple[bool, int]:
+    def add(
+        self, accuracy: float | Dict[str, float], description: str
+    ) -> tuple[bool, int]:
         """
         Add a new result. accuracy can be a float or a dict of {strategy_algo: f1}.
         Returns (is_new_best, attempt_number).
         """
         import json
+
         if isinstance(accuracy, dict):
             acc_str = json.dumps(accuracy, sort_keys=True)
             max_f1 = max(round(v, 6) for v in accuracy.values()) if accuracy else 0.0
@@ -209,6 +212,7 @@ def plot_autoresearch_chart(experiment: str, history: ExperimentHistory) -> Path
 
     # Detect if this experiment stores dict of F1s (any row with dict = multi-line mode)
     import json
+
     any_dict = False
     all_keys: List[str] = []
     for r in rows:
@@ -237,7 +241,7 @@ def plot_autoresearch_chart(experiment: str, history: ExperimentHistory) -> Path
     elif experiment == "threshold":
         # --- Threshold experiment: plot ALL individual experiments as dots ---
         # Read from log/all_experiments.csv to get every formula × algorithm pair
-        log_dir = PROJECT_ROOT / "results" / "threshold" / "log"
+        log_dir = RESULTS_DIR / "threshold" / "log"
         all_exp_csv = log_dir / "all_experiments.csv"
         fig, ax = plt.subplots(figsize=(12, 7))
         if all_exp_csv.exists():
@@ -277,11 +281,13 @@ def _plot_threshold_all_experiments(ax, all_exp_csv: Path) -> None:
                 f1 = float(row["f1"])
                 if f1 <= 0 or f1 > 1:
                     continue  # skip invalid
-                rows.append({
-                    "formula": row["formula"],
-                    "algorithm": row["algorithm"],
-                    "f1": f1,
-                })
+                rows.append(
+                    {
+                        "formula": row["formula"],
+                        "algorithm": row["algorithm"],
+                        "f1": f1,
+                    }
+                )
             except (ValueError, KeyError):
                 continue
 
@@ -327,7 +333,7 @@ def _plot_threshold_all_experiments(ax, all_exp_csv: Path) -> None:
         ax.plot(stair_x, stair_y, color="#2ca02c", linewidth=1.8, zorder=3)
 
         # Label each green dot
-        for (x, y, lbl) in zip(green_x, green_y, green_labels):
+        for x, y, lbl in zip(green_x, green_y, green_labels):
             # Truncate label to 25 chars
             lbl_short = lbl[:25]
             ax.annotate(
@@ -344,7 +350,10 @@ def _plot_threshold_all_experiments(ax, all_exp_csv: Path) -> None:
     max_f1 = max(r["f1"] for r in rows)
     ax.set_xlabel("Experiment index", fontsize=11)
     ax.set_ylabel("F1 Score", fontsize=11)
-    ax.set_title(f"Threshold experiment — {n} experiments (all formulas × algorithms)", fontsize=12)
+    ax.set_title(
+        f"Threshold experiment — {n} experiments (all formulas × algorithms)",
+        fontsize=12,
+    )
     ax.set_ylim(0, max_f1 * 1.15 if max_f1 > 0 else 1.0)
     ax.set_xlim(-1, n)
     ax.grid(True, linestyle="--", alpha=0.4)
@@ -355,6 +364,7 @@ def _plot_threshold_all_experiments(ax, all_exp_csv: Path) -> None:
 def _plot_dict_staircase(ax, rows, attempts) -> None:
     """Fallback dict plotting: best-per-attempt dots + green staircase."""
     import json
+
     best_per_attempt: List[float] = []
     best_key_per_attempt: List[str] = []
     for r in rows:
@@ -374,17 +384,27 @@ def _plot_dict_staircase(ax, rows, attempts) -> None:
 
     # Gray dots for ALL attempts (discarded)
     ax.scatter(
-        attempts, best_per_attempt,
-        color="#cccccc", s=30, zorder=2, label="discarded",
+        attempts,
+        best_per_attempt,
+        color="#cccccc",
+        s=30,
+        zorder=2,
+        label="discarded",
     )
 
     # Green circles for kept (new best)
     kept_best_x = [attempts[i] for i, k in enumerate(kept_flags_multi) if k]
     kept_best_y = [best_per_attempt[i] for i, k in enumerate(kept_flags_multi) if k]
-    kept_best_keys = [best_key_per_attempt[i] for i, k in enumerate(kept_flags_multi) if k]
+    kept_best_keys = [
+        best_key_per_attempt[i] for i, k in enumerate(kept_flags_multi) if k
+    ]
     ax.scatter(
-        kept_best_x, kept_best_y,
-        color="#2ca02c", s=80, zorder=4, label="new best",
+        kept_best_x,
+        kept_best_y,
+        color="#2ca02c",
+        s=80,
+        zorder=4,
+        label="new best",
     )
 
     # Green horizontal-only staircase
@@ -396,7 +416,7 @@ def _plot_dict_staircase(ax, rows, attempts) -> None:
             stair_y.extend([kept_best_y[i - 1], kept_best_y[i]])
         ax.plot(stair_x, stair_y, color="#2ca02c", linewidth=1.8, zorder=3)
 
-        for (x, y, key) in zip(kept_best_x, kept_best_y, kept_best_keys):
+        for x, y, key in zip(kept_best_x, kept_best_y, kept_best_keys):
             label = f"{key}={y:.3f}" if key else f"{y:.3f}"
             ax.annotate(
                 label,
@@ -419,9 +439,7 @@ def _plot_dict_staircase(ax, rows, attempts) -> None:
     ax.yaxis.set_major_formatter(plt.FuncFormatter(lambda y, _: f"{y:.2f}"))
 
 
-def _plot_single_staircase(
-    ax, attempts, accuracies, kept_flags, rows
-) -> None:
+def _plot_single_staircase(ax, attempts, accuracies, kept_flags, rows) -> None:
     """
     Staircase chart — green staircase only connects kept (new best) points.
     Gray dots = discarded attempts (not connected by the staircase line).
@@ -436,8 +454,12 @@ def _plot_single_staircase(
 
     # Plot discarded attempts as gray dots (NOT connected by staircase)
     ax.scatter(
-        attempts, accuracies,
-        color="#cccccc", s=30, zorder=2, label="discarded",
+        attempts,
+        accuracies,
+        color="#cccccc",
+        s=30,
+        zorder=2,
+        label="discarded",
     )
 
     # Plot kept checkpoints as green circles
@@ -445,8 +467,12 @@ def _plot_single_staircase(
     kept_y = [accuracies[i] for i, k in enumerate(kept_flags) if k]
     kept_rows = [rows[i] for i, k in enumerate(kept_flags) if k]
     ax.scatter(
-        kept_x, kept_y,
-        color="#2ca02c", s=80, zorder=4, label="new best",
+        kept_x,
+        kept_y,
+        color="#2ca02c",
+        s=80,
+        zorder=4,
+        label="new best",
     )
 
     # Pure horizontal-only staircase:
@@ -463,12 +489,16 @@ def _plot_single_staircase(
             stair_x.extend([kept_x[i], kept_x[i]])
             stair_y.extend([kept_y[i - 1], kept_y[i]])
         ax.plot(
-            stair_x, stair_y,
-            color="#2ca02c", linewidth=1.8, zorder=3, label="running best",
+            stair_x,
+            stair_y,
+            color="#2ca02c",
+            linewidth=1.8,
+            zorder=3,
+            label="running best",
         )
 
     # Annotate kept points with strategy name (not attempt number)
-    for (x, y, row) in zip(kept_x, kept_y, kept_rows):
+    for x, y, row in zip(kept_x, kept_y, kept_rows):
         desc = row.get("description", "") or ""
         # Label format: "(strategy_algo)" e.g. "(gap_norm f1_grid)"
         label = desc.strip()
@@ -675,7 +705,7 @@ def main(argv: Optional[List[str]] = None) -> None:
     history = ExperimentHistory(experiment)
     is_new_best, attempt = history.add(accuracy, description)
 
-    print(f"\n{'='*50}")
+    print(f"\n{'=' * 50}")
     print(f"Experiment: {experiment} | Attempt #{attempt}")
     if isinstance(accuracy, dict):
         best = max(accuracy.values())
@@ -688,7 +718,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         print(f"Accuracy:   {accuracy:.4f} ({accuracy:.2%})")
     print(f"Best so far: {history.best_accuracy:.4f} ({history.best_accuracy:.2%})")
     print(f"New best:  {'YES' if is_new_best else ('--- best unchanged ---')}")
-    print(f"{'='*50}\n")
+    print(f"{'=' * 50}\n")
 
     # Log result for threshold experiment
     if experiment == "threshold":
@@ -711,7 +741,7 @@ def _log_threshold_result(
     """Append a concise log entry to results/threshold/log/."""
     import json
 
-    log_dir = PROJECT_ROOT / "results" / "threshold" / "log"
+    log_dir = RESULTS_DIR / "threshold" / "log"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "experiments.log"
 
