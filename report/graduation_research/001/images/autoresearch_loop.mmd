@@ -1,0 +1,5 @@
+flowchart LR
+    A[Define goal\nand setup] --> B[Main agent\nfinds method]
+    B --> C[Subagent runs\nfixed prepare and eval]
+    C --> D[Log result and\nupdate context]
+    D --> B

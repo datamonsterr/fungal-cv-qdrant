@@ -149,6 +149,24 @@ def compute_all_strategy_scores(scores_arr: np.ndarray) -> Dict[str, np.ndarray]
     geom = np.power(s[:, 0] * s[:, 1] * s[:, 2] + eps, 1.0 / 3.0)
     strategies["geom_mean_top3"] = geom
 
+    # --- Top formulas from expanded analysis ---
+    # Normalized gap (s0 vs s2) - best in expanded analysis
+    strategies["gnorm_0_2"] = (s[:, 0] - s[:, 2]) / (s[:, 0] + s[:, 2] + eps)
+    # Normalized entropy top-5
+    top5 = s[:, :5]
+    row_sum5 = top5.sum(axis=1, keepdims=True) + eps
+    p5 = top5 / row_sum5
+    p5_safe = np.where(p5 > 0, p5, eps)
+    ent5 = -np.sum(p5_safe * np.log(p5_safe), axis=1)
+    max_ent5 = np.log(5)
+    strategies["ne_top5"] = 1.0 - ent5 / (max_ent5 + eps)
+    # Ratio s0 to s3 (rank 3)
+    strategies["ratio_0_3"] = s[:, 0] / (s[:, 3] + eps)
+    # s0 relative to min of top-5
+    strategies["s0_rel_min"] = s[:, 0] / (s[:, :5].min(axis=1) + eps)
+    # Coefficient of variation top-5
+    strategies["cv_top5"] = s[:, :5].std(axis=1) / (s[:, :5].mean(axis=1) + eps)
+
     return strategies
 
 
@@ -326,7 +344,15 @@ def run_analysis() -> Dict[str, Dict[str, float]]:
             analysis_rows.append(_make_row(name, "roc_opt", best_t_roc, m_roc, auroc))
         except Exception:
             all_f1s[name]["roc_opt"] = 0.0
-            analysis_rows.append(_make_row(name, "roc_opt", 0.0, evaluate_at_threshold(scores, labels, 0.0), 0.0))
+            analysis_rows.append(
+                _make_row(
+                    name,
+                    "roc_opt",
+                    0.0,
+                    evaluate_at_threshold(scores, labels, 0.0),
+                    0.0,
+                )
+            )
 
         # --- Otsu ---
         otsu_t = otsu_threshold(scores, labels)
@@ -344,11 +370,25 @@ def run_analysis() -> Dict[str, Dict[str, float]]:
         fpr10_t, achieved_fpr10 = fpr_target_threshold(scores, labels, 0.10)
         m_fpr10 = evaluate_at_threshold(scores, labels, fpr10_t)
         all_f1s[name]["fpr_10pct"] = m_fpr10["f1"]
-        analysis_rows.append(_make_row(name, "fpr_10pct", fpr10_t, m_fpr10, achieved_fpr10))
+        analysis_rows.append(
+            _make_row(name, "fpr_10pct", fpr10_t, m_fpr10, achieved_fpr10)
+        )
 
     # --- Save analysis CSV (best F1 per strategy-algorithm) ---
-    fields = ["strategy", "algorithm", "threshold", "f1", "precision", "recall",
-              "specificity", "tp", "fp", "tn", "fn", "auroc"]
+    fields = [
+        "strategy",
+        "algorithm",
+        "threshold",
+        "f1",
+        "precision",
+        "recall",
+        "specificity",
+        "tp",
+        "fp",
+        "tn",
+        "fn",
+        "auroc",
+    ]
     with open(ANALYSIS_CSV, "w", newline="") as f:
         writer = csv.DictWriter(f, fieldnames=fields)
         writer.writeheader()
@@ -365,7 +405,9 @@ def run_analysis() -> Dict[str, Dict[str, float]]:
     # --- Plots ---
     plot_threshold_curves(strategies, labels, OUTPUT_DIR / "threshold_curves.png")
     plot_roc_curves(strategies, labels, OUTPUT_DIR / "roc_curves.png")
-    plot_confusion_matrices(strategies, labels, all_f1s, OUTPUT_DIR / "confusion_matrices.png")
+    plot_confusion_matrices(
+        strategies, labels, all_f1s, OUTPUT_DIR / "confusion_matrices.png"
+    )
 
     # --- Summary: best per algorithm ---
     print("\n=== Best F1 per algorithm ===")
@@ -375,7 +417,9 @@ def run_analysis() -> Dict[str, Dict[str, float]]:
         print(f"  {algo:12s}: F1={best_f1_val:.4f} ({best_strat})")
 
     print("\n=== All strategies ranked by f1_grid ===")
-    ranked = sorted(all_f1s.keys(), key=lambda s: all_f1s[s].get("f1_grid", 0.0), reverse=True)
+    ranked = sorted(
+        all_f1s.keys(), key=lambda s: all_f1s[s].get("f1_grid", 0.0), reverse=True
+    )
     for i, name in enumerate(ranked[:15], 1):
         f1g = all_f1s[name].get("f1_grid", 0.0)
         f1r = all_f1s[name].get("roc_opt", 0.0)
@@ -420,6 +464,7 @@ def plot_threshold_curves(
     """Plot F1 vs threshold for each strategy (up to 18 in 3×6 grid)."""
     from sklearn.metrics import f1_score
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -435,13 +480,20 @@ def plot_threshold_curves(
             ax.set_visible(False)
             continue
         ts = np.linspace(mn, mx, 300)
-        f1s = [f1_score(labels, (scores >= t).astype(int), zero_division=0.0) for t in ts]
+        f1s = [
+            f1_score(labels, (scores >= t).astype(int), zero_division=0.0) for t in ts
+        ]
         best_idx = int(np.argmax(f1s))
 
         color = ALGORITHM_COLORS.get(name, "#607D8B")
         ax.plot(ts, f1s, linewidth=1.5, color=color)
-        ax.axvline(ts[best_idx], color="red", linestyle="--", alpha=0.7,
-                   label=f"best t={ts[best_idx]:.3f}\nF1={f1s[best_idx]:.3f}")
+        ax.axvline(
+            ts[best_idx],
+            color="red",
+            linestyle="--",
+            alpha=0.7,
+            label=f"best t={ts[best_idx]:.3f}\nF1={f1s[best_idx]:.3f}",
+        )
         ax.set_title(f"{name}", fontsize=9)
         ax.set_xlabel("Threshold", fontsize=7)
         ax.set_ylabel("F1", fontsize=7)
@@ -467,6 +519,7 @@ def plot_roc_curves(
     """Plot ROC curves for each strategy, faceted by algorithm."""
     from sklearn.metrics import roc_curve, roc_auc_score
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
 
@@ -483,7 +536,13 @@ def plot_roc_curves(
                 auc = roc_auc_score(labels, scores)
                 color = ALGORITHM_COLORS.get(algo, "#2196F3")
                 lw = 2 if "f1_grid" in algo else 1.0
-                ax.plot(fpr_arr, tpr, linewidth=lw, label=f"{name} (AUC={auc:.2f})", alpha=0.8)
+                ax.plot(
+                    fpr_arr,
+                    tpr,
+                    linewidth=lw,
+                    label=f"{name} (AUC={auc:.2f})",
+                    alpha=0.8,
+                )
             except Exception:
                 pass
         ax.plot([0, 1], [0, 1], "k--", alpha=0.3)
@@ -511,12 +570,15 @@ def plot_confusion_matrices(
 ) -> None:
     """Plot top-12 strategy confusion matrices at f1_grid optimal threshold."""
     import matplotlib
+
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     from sklearn.metrics import confusion_matrix
 
     # Top 12 by f1_grid
-    ranked = sorted(strategies.keys(), key=lambda s: all_f1s[s].get("f1_grid", 0.0), reverse=True)
+    ranked = sorted(
+        strategies.keys(), key=lambda s: all_f1s[s].get("f1_grid", 0.0), reverse=True
+    )
     top12 = ranked[:12]
 
     cols = 4
@@ -525,28 +587,49 @@ def plot_confusion_matrices(
     axes_flat = np.array(axes).flatten()
 
     from sklearn.metrics import f1_score
+
     eps = 1e-9
 
     for ax, name in zip(axes_flat, top12):
         scores = strategies[name]
         mn, mx = np.percentile(scores[scores > 0], [2, 98])
         ts = np.linspace(mn, mx, 500)
-        f1s = [f1_score(labels, (scores >= t).astype(int), zero_division=0.0) for t in ts]
+        f1s = [
+            f1_score(labels, (scores >= t).astype(int), zero_division=0.0) for t in ts
+        ]
         best_t = ts[np.argmax(f1s)]
 
         preds = (scores >= best_t).astype(int)
         cm = confusion_matrix(labels.astype(int), preds)
         # Reformat for display: [[TN, FP], [FN, TP]]
-        cm_display = np.array([[cm[0, 0] if cm.shape == (2, 2) else 0, cm[0, 1] if cm.shape == (2, 2) else 0],
-                                [cm[1, 0] if cm.shape == (2, 2) else 0, cm[1, 1] if cm.shape == (2, 2) else 0]])
+        cm_display = np.array(
+            [
+                [
+                    cm[0, 0] if cm.shape == (2, 2) else 0,
+                    cm[0, 1] if cm.shape == (2, 2) else 0,
+                ],
+                [
+                    cm[1, 0] if cm.shape == (2, 2) else 0,
+                    cm[1, 1] if cm.shape == (2, 2) else 0,
+                ],
+            ]
+        )
 
         best_f1 = max(f1s)
         ax.imshow(cm_display, cmap="Blues", interpolation="nearest")
         for i in range(2):
             for j in range(2):
                 color = "white" if cm_display[i, j] > cm_display.max() / 2 else "black"
-                ax.text(j, i, str(cm_display[i, j]), ha="center", va="center",
-                        color=color, fontsize=12, fontweight="bold")
+                ax.text(
+                    j,
+                    i,
+                    str(cm_display[i, j]),
+                    ha="center",
+                    va="center",
+                    color=color,
+                    fontsize=12,
+                    fontweight="bold",
+                )
         ax.set_title(f"{name}\nF1={best_f1:.3f}", fontsize=8)
         ax.set_xticks([0, 1])
         ax.set_yticks([0, 1])
@@ -555,10 +638,12 @@ def plot_confusion_matrices(
         ax.set_xlabel("Actual")
         ax.set_ylabel("Predicted")
 
-    for ax in axes_flat[len(top12):]:
+    for ax in axes_flat[len(top12) :]:
         ax.set_visible(False)
 
-    fig.suptitle("Confusion Matrices (Top-12 strategies, F1-grid threshold)", fontsize=11)
+    fig.suptitle(
+        "Confusion Matrices (Top-12 strategies, F1-grid threshold)", fontsize=11
+    )
     fig.tight_layout()
     fig.savefig(output_path, dpi=150)
     plt.close(fig)

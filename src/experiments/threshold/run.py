@@ -37,23 +37,25 @@ def run_accuracy(strategy: str = "best", **kwargs) -> float | Dict[str, float]:
         float or dict of strategy F1s. For best/all, also prints the best
         strategy name so the caller can use it as description.
     """
-    from src.experiments.threshold.threshold_analysis import (
-        INPUT_CSV,
-        run_analysis,
+    from src.experiments.threshold.expanded_threshold_analysis import (
+        INPUT_CSV as EXPANDED_INPUT_CSV,
+        run as expanded_run,
     )
     from src.experiments.threshold.retrieve_diverse import retrieve_diverse
 
-    if not INPUT_CSV.exists():
+    if not EXPANDED_INPUT_CSV.exists():
         print("Retrieval CSV not found — running retrieve_diverse first...")
         retrieve_diverse()
 
-    all_f1s: Dict[str, Dict[str, float]] = run_analysis()  # {strategy: {algo: f1}}
+    # Run expanded analysis (192 formulas × 3 algorithms = 576 experiments)
+    print("Running expanded threshold analysis...")
+    all_results, best_overall = expanded_run()
 
     # Flatten to {strategy_algo: f1}
     flat: Dict[str, float] = {}
-    for strat, algos in all_f1s.items():
-        for algo, f1 in algos.items():
-            flat[f"{strat}_{algo}"] = f1
+    for r in all_results:
+        key = f"{r['formula']}_{r['algorithm']}"
+        flat[key] = float(r["f1"])
 
     if strategy == "all":
         return flat

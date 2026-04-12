@@ -1,0 +1,7 @@
+Graduation Research Report Notes
+
+- This report should stay grounded in the current repository state, not an idealized future system.
+- Some result reporting is ahead of the report templates; for example cross validation and kmeans report content files are still placeholders.
+- Threshold reporting has a version-consistency issue: the current refreshed log reports 0.4000, while the older threshold report documents a stronger 0.4587 result.
+- Fine-tuning code is split across local and Colab-oriented scripts, so packaging one canonical experiment path is a necessary engineering task.
+- The report should emphasize that public external datasets are useful mostly for pretraining and regularization, not as replacements for the in-domain dataset.

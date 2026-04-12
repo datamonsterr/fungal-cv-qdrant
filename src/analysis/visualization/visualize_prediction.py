@@ -192,6 +192,19 @@ def _draw_image_card(
         text_y += _text_size(draw, text, font)[1] + line_spacing
 
 
+def _resolve_image_path(
+    item: Dict[str, Any],
+    default_dir: str,
+    id_key: str,
+) -> str:
+    explicit_path = item.get("image_path") or item.get("query_image_path")
+    if explicit_path:
+        return explicit_path
+
+    image_id = item.get(id_key) or item.get("id") or ""
+    return os.path.join(default_dir, f"{image_id}.jpg")
+
+
 def visualize_prediction_by_environment(
     prediction_result: Dict[str, Any],
     segmented_image_dir: str,
@@ -359,7 +372,11 @@ def visualize_prediction_by_environment(
 
         cards: List[Dict[str, Any]] = [
             {
-                "image_path": os.path.join(segmented_image_dir, f"{query_id}.jpg"),
+                "image_path": _resolve_image_path(
+                    result,
+                    segmented_image_dir,
+                    "query_image_id",
+                ),
                 "border_color": (0, 0, 0),
                 "lines": [("Query", text_font), (f"ID: {query_id}", small_font)],
             }
@@ -372,7 +389,11 @@ def visualize_prediction_by_environment(
             n_strain = neighbor.get("strain", "unknown")
             cards.append(
                 {
-                    "image_path": os.path.join(segmented_image_dir, f"{n_id}.jpg"),
+                    "image_path": _resolve_image_path(
+                        neighbor,
+                        segmented_image_dir,
+                        "image_id",
+                    ),
                     "border_color": generate_distinct_color(n_specy, ground_truth),
                     "lines": [
                         (f"#{i} {n_specy}", text_font),

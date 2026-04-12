@@ -3,6 +3,25 @@
   "model": "minimax-coding-plan/MiniMax-M2.7",
   "default_agent": "autoresearch",
   "autoupdate": true,
+  "mcp": {
+    "serena": {
+      "type": "local",
+      "command": [
+        "uvx",
+        "--from",
+        "git+https://github.com/oraios/serena",
+        "serena",
+        "start-mcp-server",
+        "."
+      ],
+      "enabled": true
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true
+    }
+  },
   "agent": {
     "autoresearch": {
       "description": "Autoresearch loop agent for fungal classification experiments",
@@ -31,11 +50,7 @@
       }
     }
   },
-  "permission": {
-    "edit": "allow",
-    "bash": "allow",
-    "webfetch": "allow"
-  },
+  "permission": "allow",
   "instructions": [
     ".opencode/rules/experiment-visualization.md",
     ".opencode/rules/branch-naming.md"

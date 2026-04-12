@@ -1,105 +1,166 @@
-Set up and run the threshold-based unknown species detection experiment.
+Reset and set up the threshold experiment on the refreshed segmented diverse retrieval pipeline.
 
-## What this experiment does
+## Mission
 
-Tests formula variants (using s0..s4 neighbour scores) to find a threshold that separates
-**known** test-strain species (7 Penicillium species held out from Qdrant) from **unknown**
-species (all other images in diverse_data).
+Build a new canonical threshold input from segmented diverse colony queries, then establish a fresh baseline F1 that every later threshold autoresearch attempt must build on.
 
-- **Retrieval**: EfficientNetB1_finetuned + E1 (same environment) + k=11 + weighted aggregation
-- **Test set**: 861 images — 210 known (7 species × 30 images), 651 unknown
-- **Known species**: DTO 217-D9 (neoechinulatum), DTO 470-I9 (tricolor), DTO 158-D1 (melanoconidium),
-  DTO 148-D1 (polonicum), DTO 469-I5 (aurantiogriseum), DTO 469-I4 (freii), DTO 163-I2 (viridicatum)
-- **Algorithms**: f1_grid, roc_opt, otsu (3 per formula — NO fpr-based algorithms)
+## Hard reset
+
+Do **not** trust old threshold artifacts produced from:
+
+- full-plate `preprocessed` diverse queries
+- stale `results/threshold/diverse_retrieval_results.csv`
+- `src/experiments/threshold/retrieve_with_train_filter.py`
+- any threshold analysis run created before the segmented diverse test-set retrieval refresh
+
+The canonical threshold input must now come from:
+
+- segmented diverse query images in `Dataset/diverse_data/.../*_seg{n}.jpg`
+- grouped per-strain test sets that match the segmented retrieval and cross-validation logic
+- same-environment retrieval against `myco_fungi_features_full_finetuned`
+- weighted aggregation from segmented DB neighbors
+- full visualization and JSON for every retrieved test set
+
+## Known and Unknown data
+
+Known samples:
+
+- the 7 held-out Penicillium test strains prepared by `src/experiments/threshold/prepare_test_strains.py`
+
+Unknown samples:
+
+- all remaining diverse strains in `Dataset/diverse_data`
+
+Rows in the refreshed retrieval CSV must be **per test set**, not per original image and not per whole strain.
+One strain can contribute up to 6 test sets:
+
+- `seg0_ob`
+- `seg0_rev`
+- `seg1_ob`
+- `seg1_rev`
+- `seg2_ob`
+- `seg2_rev`
+
+Each test set should contain one segmented query colony per available environment.
 
 ## Prerequisites
 
 ```bash
-# 1. Qdrant must be running with the finetuned collection populated
 docker compose up -d
-
-# 2. Test strain images must be in Qdrant-excluded set
-#    (run prepare_test_strains.py if not already done)
 ```
 
-## Step 1 — Copy test strain images + build retrieval list (one-time)
+## Step 1 — Prepare held-out known test strains
 
 ```bash
 uv run python -m src.experiments.threshold.prepare_test_strains
-# Outputs:
-#   Dataset/diverse_data/images/{species}/{env}/  (copied test strain segments)
-#   results/threshold/test_strain_retrieval_list.json
 ```
 
-## Step 2 — Retrieve scores (~10–20 min)
+Expected outputs:
+
+- `results/threshold/test_strain_retrieval_list.json`
+- `Dataset/diverse_data/diverse_data_with_test_strains_metadata.json`
+
+Important check:
+
+- if the retrieval path still ignores the prepared known test strains or still reads the wrong metadata source, fix that first before trusting the next steps
+
+## Step 2 — Rebuild segmented diverse retrieval with full visualization
+
+Canonical retrieval implementation:
+
+- `src/experiments/threshold/retrieve_diverse.py`
+
+Requirements for this retrieval step:
+
+- query `step_images["segments"]`, not full-plate `preprocessed` images
+- build per-strain test sets using the same segmented test-set logic as the retrieval and cross-validation code
+- skip diverse environments that do not exist in the DB
+- use same-environment retrieval only
+- regenerate the canonical `s0_score..s4_score` inputs from this refreshed retrieval
+- write full visualization and JSON for every retrieved test set
+
+If the current code path still mixes full images with segmented images, or does not include the prepared known test strains, fix that first before continuing.
 
 ```bash
-uv run python -m src.experiments.threshold.retrieve_with_train_filter
-# Outputs: results/threshold/diverse_retrieval_results.csv
+uv run python -m src.experiments.threshold.retrieve_diverse
 
 # Resume if interrupted:
-uv run python -m src.experiments.threshold.retrieve_with_train_filter --resume
+uv run python -m src.experiments.threshold.retrieve_diverse --resume
 ```
 
-## Step 3 — Run threshold analysis + visualize
+Expected outputs:
+
+- `results/threshold/diverse_retrieval_results.csv`
+- `results/threshold/diverse_retrieval_visualizations/`
+- `results/threshold/diverse_retrieval_json/`
+
+## Step 3 — Validate the refreshed retrieval before threshold analysis
+
+Do **not** continue until all of these are true:
+
+1. `results/threshold/diverse_retrieval_results.csv` contains both `is_known=1` and `is_known=0`
+2. each row is a test set such as `strain__set1`
+3. `image_path` entries point to segmented diverse query paths such as `*_seg0.jpg`
+4. retrieval visualizations show segmented diverse query crops and DB segmented neighbors
+5. the score columns `s0_score..s4_score` come from the refreshed segmented retrieval, not from a stale run
+6. the retrieval JSON files contain per-test-set `raw_results` with one query segment per available environment
+
+If any check fails, fix the retrieval implementation and regenerate the retrieval outputs before running threshold analysis.
+
+## Step 4 — Run the fresh baseline threshold experiment
+
+Use the normal experiment entry point so the result is recorded in autoresearch history.
 
 ```bash
-# 162 formulas × 3 algorithms = 486 experiments
-uv run python -m src.experiments.threshold.threshold_analysis
-
-# Outputs:
-#   results/threshold/threshold_analysis.csv   (best F1 per strategy × algorithm)
-#   results/threshold/log/all_experiments.csv   (ALL individual experiments)
-#   results/threshold/threshold_curves.png     (F1 vs t curves per formula)
-#   results/threshold/roc_curves.png           (ROC curves per algorithm)
-#   results/threshold/confusion_matrices.png   (confusion matrices at optimal t)
+uv run python src/prepare.py --experiment threshold --description "baseline refreshed segmented diverse retrieval"
 ```
 
-To generate 800+ formula variants (extended search):
-```bash
-uv run python -m src.experiments.threshold.expanded_threshold_analysis
-```
+This run establishes the new baseline F1.
+If the threshold experiment code still assumes stale retrieval semantics, fix that first and re-run the baseline.
 
-## Step 4 — Record as autoresearch attempt
+Expected outputs:
 
-```bash
-uv run python src/run.py --experiment threshold --description "describe what changed"
-# Returns best F1 across all strategies. New best → kept checkpoint.
-```
+- `results/threshold/threshold_analysis.csv`
+- `results/threshold/all_strategy_results.csv`
+- `results/autoresearch/threshold.csv`
+- `results/autoresearch/threshold.png`
 
-## Branch naming
+## Step 5 — Interpret the baseline with the staircase rule
 
-```bash
-git checkout -b threshold/{N}-{summary}
-# e.g. threshold/2-gap-strategy, threshold/3-otsu-tuning
-```
+Use `.claude/rules/experiment-visualization.md` as the source of truth for interpreting the staircase in:
 
-Merge winning branches back to `threshold/` (no attempt suffix).
+- `results/autoresearch/threshold.csv`
+- `results/autoresearch/threshold.png`
 
-## Threshold algorithms
+After the baseline run:
 
-| Algorithm | Description |
-|-----------|-------------|
-| `f1_grid` | Sweep 500 threshold candidates, pick argmax F1 |
-| `roc_opt` | Maximise Youden's J (sensitivity + specificity − 1) |
-| `otsu` | Minimise intra-class variance |
+- identify the best current `{formula}_{algorithm}`
+- identify whether it is the latest running best point on the staircase
+- use that formula family as the center of gravity for the next experiment loop
 
-## Formula naming conventions
+Do **not** append logs to `.claude/rules/experiment-visualization.md`.
+Use that file as the staircase specification, and log experiment outcomes in the threshold result and log files.
 
-| Prefix | Meaning |
-|--------|---------|
-| `gap_{i}_{j}` | s{i} − s{j} |
-| `gnorm_{i}_{j}` | (s{i} − s{j}) / (s{i} + s{j}) |
-| `ratio_{i}_{j}` | s{i} / s{j} |
-| `avg_top{k}` | Mean of top-k scores |
-| `gm_top{k}` | Geometric mean of top-k |
-| `ne_top{k}` | Normalised entropy of top-k |
+## Step 6 — Prepare the next session handoff
+
+Before handing off, make sure these are current:
+
+- `results/threshold/diverse_retrieval_results.csv`
+- `results/threshold/diverse_retrieval_visualizations/`
+- `results/threshold/diverse_retrieval_json/`
+- `results/threshold/log/experiments.log`
+- `results/threshold/log/best_strategy.json`
+- `results/autoresearch/threshold.csv`
+- `results/autoresearch/threshold.png`
+
+The next autoresearch session should continue with `/threshold-experiment`.
 
 ## Key files
 
-- `src/experiments/threshold/program.md` — full design doc
-- `src/experiments/threshold/retrieve_with_train_filter.py` — Qdrant retrieval with test strain exclusion
-- `src/experiments/threshold/prepare_test_strains.py` — copy test strain images + build retrieval list
-- `src/experiments/threshold/threshold_analysis.py` — 3-algorithm threshold strategies + plots
-- `src/experiments/threshold/expanded_threshold_analysis.py` — 100+ formula variants
-- `src/run.py` — autoresearch entry point (returns F1, plots staircase)
+- `src/experiments/threshold/prepare_test_strains.py`
+- `src/experiments/threshold/retrieve_diverse.py`
+- `src/experiments/threshold/threshold_analysis.py`
+- `src/experiments/threshold/expanded_threshold_analysis.py`
+- `src/experiments/threshold/run.py`
+- `src/analysis/visualization/visualize_prediction.py`
+- `.claude/rules/experiment-visualization.md`

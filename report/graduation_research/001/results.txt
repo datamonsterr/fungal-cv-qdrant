@@ -1,0 +1,8 @@
+Graduation Research Report Results
+
+- Primary closed-set baseline: 83.3% retrieval accuracy with EfficientNetB1 finetuned
+- Best archived 5-fold CV mean: 0.6542 with E1 + weighted(avg) + k=11
+- Historical threshold best: F1 0.4587 with wtd_rat_halving + roc_opt
+- Current refreshed threshold baseline: F1 0.4000 with gnorm_0_2_p_gnorm_0_3 + f1_grid
+- Main gap: refreshed open-set baseline is below the previous best and still has many false positives
+- Main system gap: client/server platform is not yet packaged as a maintained repo deliverable
