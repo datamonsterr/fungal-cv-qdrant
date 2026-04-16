@@ -21,7 +21,12 @@ Three training approaches for fungal species classification. All scripts run in 
 from google.colab import drive
 drive.mount('/content/drive')
 
-!pip install torch torchvision tqdm scikit-learn pandas matplotlib pillow
+!curl -LsSf https://astral.sh/uv/install.sh | sh
+
+import os
+os.environ["PATH"] = f"/root/.local/bin:{os.environ['PATH']}"
+
+!uv pip install torch torchvision tqdm scikit-learn pandas matplotlib pillow
 ```
 
 ## Running Each Script

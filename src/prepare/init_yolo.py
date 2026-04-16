@@ -12,8 +12,8 @@ import cv2
 import pandas as pd
 
 from src.config import DATASET_ROOT, ORIGINAL_DATASET_PATH, STRAIN_SPECIES_MAPPING_PATH
-from src.experiments.preprocessing.kmeans import segment_kmeans
-from src.experiments.preprocessing.preprocess import process_image
+from src.preprocessing.kmeans import segment_kmeans
+from src.preprocessing.preprocess import process_image
 
 YOLO_DATASET_PATH = DATASET_ROOT / "yolo"
 FILE_EXTENSION = ".jpg"

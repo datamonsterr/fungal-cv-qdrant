@@ -17,8 +17,8 @@ from src.config import (
     STRAIN_SPECIES_MAPPING_PATH,
     relative_to_workspace,
 )
-from src.experiments.preprocessing.kmeans import segment_kmeans
-from src.experiments.preprocessing.preprocess import process_image
+from src.preprocessing.kmeans import segment_kmeans
+from src.preprocessing.preprocess import process_image
 
 POSSIBLE_ENVIRONMENTS = []
 POSSIBLE_ANGLES = ["ob", "rev"]

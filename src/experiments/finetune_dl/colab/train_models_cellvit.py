@@ -521,7 +521,7 @@ def train_model(
     epoch_pbar = tqdm(range(num_epochs), desc="Training Progress", position=0)
 
     for epoch in epoch_pbar:
-        epoch_pbar.set_description(f"Epoch {epoch+1}/{num_epochs}")
+        epoch_pbar.set_description(f"Epoch {epoch + 1}/{num_epochs}")
 
         for phase in ["train", "val"]:
             if phase == "train":
@@ -620,8 +620,8 @@ def train_model(
 
                 epoch_pbar.set_postfix(
                     {
-                        "train_loss": f'{history["loss"][-1]:.4f}',
-                        "train_acc": f'{history["accuracy"][-1]:.4f}',
+                        "train_loss": f"{history['loss'][-1]:.4f}",
+                        "train_acc": f"{history['accuracy'][-1]:.4f}",
                         "val_loss": f"{epoch_loss:.4f}",
                         "val_acc": f"{epoch_acc:.4f}",
                         "best": f"{best_acc:.4f}",
@@ -687,7 +687,10 @@ def main():  # noqa: C901
         print(f"Using device: {device}")
         if USE_TPU and not TPU_AVAILABLE:
             print("Warning: TPU requested but PyTorch XLA not available")
-            print("Install with: pip install torch_xla")
+            print(
+                "Install with: uv pip install torch-xla -f "
+                "https://storage.googleapis.com/libtpu-wheels/index.html"
+            )
 
     # Print paths for verification
     print("\n" + "=" * 60)
@@ -904,7 +907,7 @@ def main():  # noqa: C901
     }
 
     # Train ViT model
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("Training Vision Transformer with pretrained weights...")
     print("=" * 60)
 
@@ -962,7 +965,7 @@ def main():  # noqa: C901
     print("Learning Rate Schedule:")
     print(f"  Base LR: {LEARNING_RATE}")
     print(
-        f"  Warmup epochs: {WARMUP_EPOCHS} (linear warmup from {LEARNING_RATE*0.1:.6f} to {LEARNING_RATE})"
+        f"  Warmup epochs: {WARMUP_EPOCHS} (linear warmup from {LEARNING_RATE * 0.1:.6f} to {LEARNING_RATE})"
     )
     print(
         f"  Cosine annealing: {NUM_EPOCHS - WARMUP_EPOCHS} epochs (decay to {MIN_LR:.6f})"

@@ -31,7 +31,8 @@ Result: ViT accuracy improved from 36% → ~55–65% with 10× augmentation. Sti
 
 ```python
 # Change runtime: Runtime > Change runtime type > TPU v5e
-!pip install torch-xla -f https://storage.googleapis.com/libtpu-wheels/index.html
+# Assumes `uv` is already available in this Colab session.
+!uv pip install torch-xla -f https://storage.googleapis.com/libtpu-wheels/index.html
 
 import torch_xla.core.xla_model as xm
 device = xm.xla_device()

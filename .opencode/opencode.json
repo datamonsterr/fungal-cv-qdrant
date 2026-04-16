@@ -1,0 +1,28 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "snapshot": false,
+  "watcher": {
+    "ignore": [
+      ".git/**",
+      ".venv/**",
+      "__pycache__/**",
+      ".mypy_cache/**",
+      ".pytest_cache/**",
+      ".ruff_cache/**",
+      "qdrant_storage/**",
+      "results/**",
+      "weights/**",
+      "Dataset/**",
+      "report/**",
+      "**/*.jpg",
+      "**/*.png",
+      "**/*.pt",
+      "**/*.pth",
+      "**/*.pkl",
+      "**/*.zip",
+      "**/*.mmap",
+      "**/*.npy",
+      "**/*.npz"
+    ]
+  }
+}

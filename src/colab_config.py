@@ -10,14 +10,15 @@ from textwrap import dedent
 def get_colab_setup_cell() -> str:
     return dedent(
         """
-        !pip install -q uv
-        !uv sync
+        !curl -LsSf https://astral.sh/uv/install.sh | sh
 
         import os
         from pathlib import Path
 
+        os.environ["PATH"] = f"/root/.local/bin:{os.environ['PATH']}"
         PROJECT_ROOT = Path('/content/fungal-cv-qdrant')
         os.chdir(PROJECT_ROOT)
+        !uv sync
 
         print('Project root:', PROJECT_ROOT)
         print('Run training modules like:')

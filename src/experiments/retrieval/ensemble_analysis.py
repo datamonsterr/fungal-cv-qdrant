@@ -1057,7 +1057,7 @@ def draw_confusion_matrix(
         from sklearn.metrics import classification_report, confusion_matrix
     except ImportError:
         print("Error: scikit-learn is required for confusion matrix.")
-        print("Install with: uv pip install scikit-learn")
+        print("Install with: uv sync")
         return
 
     # Extract ground truth and predictions
