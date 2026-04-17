@@ -34,6 +34,44 @@ Shared runtime paths now live outside this submodule:
 - src/analysis: visualization and analysis scripts
 - report: archived markdown reports; new experiments should generate LaTeX reports
 
+## Remote Workspace Bootstrap
+
+When this repository is used inside the MycoAI monorepo, shared remote workspace
+bootstrap and dataset sync commands live at the monorepo root under `tools/`.
+Run these from `/home/dat/dev/mycoai/`.
+
+The remote workflow assumes you record the Vast.ai `instance_id`, connect with
+VSCode Remote-SSH, and keep Google Drive credentials outside the repo via
+`RCLONE_CONFIG` or the default `~/.config/rclone/rclone.conf`.
+
+### Prepare and validate a remote workspace
+
+```bash
+bash tools/workspace_bootstrap.sh prepare
+bash tools/workspace_bootstrap.sh smoke-check
+```
+
+`mise install` now installs `rclone` alongside the other shared tools, so the
+same prepared workspace can run `tools/dataset_sync.py` without extra package
+management.
+
+Use `bash tools/workspace_bootstrap.sh recover --instance-id <id>` after a
+restart or replacement if you need to revalidate the workspace and refresh your
+local SSH config.
+
+### Preview and run dataset sync
+
+```bash
+uv run python tools/dataset_sync.py plan --direction import --remote mydrive:mycoai-dataset --scope original/sample
+uv run python tools/dataset_sync.py import --remote mydrive:mycoai-dataset --scope original/sample
+uv run python tools/dataset_sync.py export --remote mydrive:mycoai-dataset --scope segmented_image/new-batch
+```
+
+The sync CLI uses non-destructive `rclone copy` operations, expects credentials
+to live outside the repo, and writes summaries under `../results/dataset_sync/`.
+Run the `plan` command first to verify remote access and scope before starting
+an `import` or `export`.
+
 ## Canonical Commands
 
 Run these commands from the monorepo root with `uv --directory fungal-cv-qdrant ...`.
