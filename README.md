@@ -68,9 +68,9 @@ uv run python tools/dataset_sync.py export --remote mydrive:mycoai-dataset --sco
 ```
 
 The sync CLI uses non-destructive `rclone copy` operations, expects credentials
-to live outside the repo, and writes summaries under `../results/dataset_sync/`.
-Run the `plan` command first to verify remote access and scope before starting
-an `import` or `export`.
+to live outside the repo, and writes summaries under `results/dataset_sync/`
+when run from the monorepo root. Run the `plan` command first to verify remote
+access and scope before starting an `import` or `export`.
 
 ## Canonical Commands
 
