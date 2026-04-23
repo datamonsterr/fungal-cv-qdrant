@@ -1,14 +1,44 @@
 import os
+import subprocess
 from pathlib import Path
+
+
+def _has_any_marker(path: Path, markers: tuple[str, ...]) -> bool:
+    return any((path / marker).exists() for marker in markers)
+
+
+def _discover_root_from_worktree(project_root: Path) -> Path | None:
+    try:
+        result = subprocess.run(
+            ["git", "rev-parse", "--show-superproject-working-tree"],
+            cwd=project_root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+
+    worktree_root = Path(result.stdout.strip()).resolve()
+    if not str(worktree_root):
+        return None
+    monorepo_root = (
+        worktree_root.parent.parent
+        if worktree_root.parent.name == "worktrees"
+        else worktree_root
+    )
+    return monorepo_root
 
 
 def _default_workspace_root() -> Path:
     project_root = Path(__file__).resolve().parent.parent
-    parent = project_root.parent
-    monorepo_markers = (
+    strong_markers = (
         "Dataset",
         "results",
         "weights",
+        "species_weights.json",
+    )
+    fallback_markers = (
         "mise.toml",
         ".agents",
         ".claude",
@@ -17,10 +47,22 @@ def _default_workspace_root() -> Path:
         "CLAUDE.md",
     )
 
-    if project_root.name == "fungal-cv-qdrant" and any(
-        (parent / marker).exists() for marker in monorepo_markers
-    ):
-        return parent
+    if project_root.name != "fungal-cv-qdrant":
+        return project_root
+
+    worktree_root = _discover_root_from_worktree(project_root)
+    if worktree_root is not None and _has_any_marker(worktree_root, strong_markers):
+        return worktree_root
+
+    fallback_root: Path | None = None
+    for candidate in project_root.parents:
+        if _has_any_marker(candidate, strong_markers):
+            return candidate
+        if fallback_root is None and _has_any_marker(candidate, fallback_markers):
+            fallback_root = candidate
+
+    if fallback_root is not None:
+        return fallback_root
 
     return project_root
 
