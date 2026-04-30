@@ -122,26 +122,22 @@ class Metadata:
             return False
 
         new_data_index = parts.index("new_data")
-        if len(parts) <= new_data_index + 3:
+        if len(parts) <= new_data_index + 4:
             return False
 
+        self.environment = parts[new_data_index + 1]
         self.specy = parts[new_data_index + 2]
         self.strain = parts[new_data_index + 3]
 
         stem = Path(self.filename).stem if "." in self.filename else self.filename
-        tokens = [token for token in re.split(r"[\s_]+", stem) if token]
-        angle_map = {"ob": "ob", "rev": "rev"}
-        environment_tokens: list[str] = []
-
-        for token in tokens:
-            token_lower = token.lower()
-            if token_lower in angle_map:
-                self.angle = angle_map[token_lower]
-                break
-            environment_tokens.append(token)
-
-        if environment_tokens:
-            self.environment = environment_tokens[-1]
+        angle_match = re.search(r"([A-Za-z0-9]+)(rev|ob)$", stem, flags=re.IGNORECASE)
+        if angle_match:
+            self.angle = angle_match.group(2).lower()
+        else:
+            for token in (token.lower() for token in re.split(r"[\s_]+", stem) if token):
+                if token in POSSIBLE_ANGLES:
+                    self.angle = token
+                    break
 
         return True
 
@@ -206,7 +202,10 @@ def _save_yolo_bounding_box_image(
     id: str,
     image,
     detections: list[Detection],
-) -> str:
+) -> str | None:
+    if not detections:
+        return None
+
     bbox_img = image.copy()
     for index, det in enumerate(detections):
         colour = COLONY_COLOURS_BGR[index % len(COLONY_COLOURS_BGR)]
@@ -254,7 +253,7 @@ def _process_image(
     confidence_threshold: float,
     source_name: str,
 ) -> dict[str, object] | None:
-    source_key = str(original_img_path.resolve().relative_to(source_path.parent))
+    source_key = str(original_img_path.resolve())
     id = uuid.uuid5(uuid.NAMESPACE_URL, source_key).hex
     metadata = Metadata(
         original_img_path.name,
@@ -280,8 +279,6 @@ def _process_image(
         key=lambda detection: detection.confidence,
         reverse=True,
     )[:3]
-    if not detections:
-        return None
 
     original_rel = _save_step_image(metadata, source_name, id, "original", original_img)
     centered_rel = _save_step_image(metadata, source_name, id, "centered", centered_img)
@@ -319,7 +316,7 @@ def _process_image(
         )
         bbox_records.append({"xmin": x1, "ymin": y1, "xmax": x2, "ymax": y2})
 
-    if not segment_paths:
+    if not segment_paths and detections:
         return None
 
     full_metadata = {
@@ -335,6 +332,7 @@ def _process_image(
             "yolo": yolo_rel,
         },
         "data": {
+            "specy": metadata.specy,
             "species": metadata.specy,
             "strain": metadata.strain,
             "environment": metadata.environment,
@@ -348,7 +346,7 @@ def _process_image(
     return full_metadata
 
 
-def reformat_dataset(
+def export_dataset_all_comparison(
     sources: list[str] | None = None,
     local_model_path: str | None = None,
     confidence_threshold: float = 0.25,
@@ -404,6 +402,16 @@ def reformat_dataset(
     print(f"Images: {len(metadata_list)}")
 
 
+def reformat_dataset(create_hierarchical: bool = True):
+    from src.utils.reformat_dataset_yolo import run_yolo_segmentation
+
+    return run_yolo_segmentation(
+        source_dir=str(ORIGINAL_DATASET_PATH),
+        local_model_path=str(DEFAULT_YOLO_WEIGHTS_PATH),
+        create_hierarchical=create_hierarchical,
+    )
+
+
 if __name__ == "__main__":
     import argparse
 
@@ -437,7 +445,7 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    reformat_dataset(
+    export_dataset_all_comparison(
         sources=args.source,
         local_model_path=args.local_path,
         confidence_threshold=args.confidence,
