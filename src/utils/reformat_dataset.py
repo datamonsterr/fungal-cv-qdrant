@@ -16,6 +16,7 @@ from src.config import (
     HEIGHT,
     ORIGINAL_DATASET_PATH,
     STRAIN_SPECIES_MAPPING_PATH,
+    WEIGHTS_DIR,
     WIDTH,
     relative_to_workspace,
 )
@@ -27,9 +28,7 @@ FILE_EXTENSION = ".jpg"
 OUTPUT_ROOT = DATASET_ROOT / "all"
 IMAGES_ROOT = OUTPUT_ROOT / "images"
 FULL_IMAGE_METADATA_PATH = OUTPUT_ROOT / "all_metadata.json"
-DEFAULT_YOLO_WEIGHTS_PATH = (
-    DATASET_ROOT.parent / "weights" / "segmentation" / "yolo_segmentation_best.pt"
-)
+DEFAULT_YOLO_WEIGHTS_PATH = WEIGHTS_DIR / "segmentation" / "yolo_segmentation_best.pt"
 COLONY_COLOURS_BGR = [(0, 80, 255), (0, 220, 80), (255, 80, 80)]
 
 
@@ -153,6 +152,7 @@ def _strain_slug(value: str) -> str:
 def _image_dir(metadata: Metadata, source_name: str) -> Path:
     return (
         IMAGES_ROOT
+        / source_name
         / _species_slug(metadata.specy)
         / _strain_slug(metadata.strain)
         / metadata.environment
@@ -381,7 +381,7 @@ def export_dataset_all_comparison(
 
         for dir_path in _iter_image_directories(source_path):
             for filename in os.listdir(dir_path):
-                if not filename.endswith(FILE_EXTENSION):
+                if Path(filename).suffix.lower() != FILE_EXTENSION:
                     continue
 
                 full_metadata = _process_image(
