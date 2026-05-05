@@ -101,7 +101,6 @@ def build_prediction_result(
     )
 
     gm3 = compute_gm3(scores)
-    _s0 = scores[0]
 
     # Neighbors: top-5 from the CSV columns
     neighbors = []
@@ -162,7 +161,6 @@ def run_visualization():
 
     rows = load_csv()
     n = len(rows)
-    _labels = np.array([int(r["is_known"]) for r in rows])
 
     # Pre-compute score matrix
     all_scores = np.zeros((n, 5))

@@ -1098,11 +1098,9 @@ def run(params: ExperimentParams) -> ExperimentResult:
         strategy_name = params.description[:30] if params.description else "retrieval"
         artifact_paths = [str(output_root / "artifacts")]
     except Exception as exc:
-        f1 = 0.0
-        strategy_name = "retrieval_error"
-        artifact_paths = []
         error_log = log_dir / "run.log"
         error_log.write_text(str(exc))
+        raise
 
     result_data = {
         "f1_score": f1,

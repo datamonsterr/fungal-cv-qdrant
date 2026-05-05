@@ -258,7 +258,6 @@ def generate_formulas(scores: np.ndarray) -> Dict[str, np.ndarray]:
     gnorm_0_3 = (s[:, 0] - s[:, 3]) / (s[:, 0] + s[:, 3] + eps)
     gnorm_0_4 = (s[:, 0] - s[:, 4]) / (s[:, 0] + s[:, 4] + eps)
     gnorm_1_2 = (s[:, 1] - s[:, 2]) / (s[:, 1] + s[:, 2] + eps)
-    _gnorm_1_3 = (s[:, 1] - s[:, 3]) / (s[:, 1] + s[:, 3] + eps)
     formulas["gnorm_0_2_x_gnorm_0_3"] = gnorm_0_2 * gnorm_0_3
     formulas["gnorm_0_2_x_gnorm_0_4"] = gnorm_0_2 * gnorm_0_4
     formulas["gnorm_0_3_x_gnorm_0_4"] = gnorm_0_3 * gnorm_0_4

@@ -1,7 +1,6 @@
 import json
 import os
 import re
-import shutil
 import sys
 import uuid
 from dataclasses import dataclass
@@ -13,8 +12,6 @@ from ultralytics import YOLO
 
 from src.config import (
     DATASET_ROOT,
-    FULL_IMAGE_METADATA_PATH,
-    FULL_IMAGE_PATH,
     SEGMENTED_IMAGE_DIR,
     SEGMENTED_METADATA_PATH,
     STRAIN_SPECIES_MAPPING_PATH,
@@ -127,28 +124,6 @@ def _save_hierarchical_segment(
     return relative_to_workspace(hierarchical_file_path)
 
 
-def _save_hierarchical_original(
-    metadata: Metadata,
-    image_id: str,
-    full_img_path,
-) -> str:
-    clean_strain = metadata.strain.replace(" ", "_").replace("/", "-")
-    hierarchical_filename = (
-        f"{clean_strain}_{metadata.environment}_{metadata.angle}_{image_id}_original"
-        f"{FILE_EXTENSION}"
-    )
-    hierarchical_dir = (
-        HIERARCHICAL_DATASET_PATH
-        / metadata.specy
-        / metadata.strain
-        / metadata.environment
-    )
-    hierarchical_dir.mkdir(parents=True, exist_ok=True)
-    hierarchical_file_path = hierarchical_dir / hierarchical_filename
-    shutil.copyfile(full_img_path, hierarchical_file_path)
-    return relative_to_workspace(hierarchical_file_path)
-
-
 def run_yolo_segmentation(
     source_dir: str,
     model_id: str = YOLO_MODEL_ID,
@@ -176,18 +151,12 @@ def run_yolo_segmentation(
         print(f"Warning: {STRAIN_SPECIES_MAPPING_PATH} not found.")
         strain_to_specy = pd.DataFrame(columns=["Strain", "Species"])
 
-    FULL_IMAGE_PATH.mkdir(parents=True, exist_ok=True)
     SEGMENTED_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-
-    if not FULL_IMAGE_METADATA_PATH.exists():
-        with open(FULL_IMAGE_METADATA_PATH, "w") as f:
-            json.dump([], f)
 
     if not SEGMENTED_METADATA_PATH.exists():
         with open(SEGMENTED_METADATA_PATH, "w") as f:
             json.dump([], f)
 
-    metadata_list: list[dict[str, dict[str, str] | str]] = []
     segment_metadata_list: list[dict[str, dict[str, str] | str]] = []
 
     source_path = Path(source_dir)
@@ -211,34 +180,22 @@ def run_yolo_segmentation(
             metadata = Metadata(filename, id, strain_to_specy)
 
             original_img_path = dir_path / filename
-            full_img_path = FULL_IMAGE_PATH / f"{id}{FILE_EXTENSION}"
-
-            shutil.copyfile(original_img_path, full_img_path)
-            full_metadata = metadata.get_metadata()
-            full_metadata["file_path"] = relative_to_workspace(full_img_path)
-            if create_hierarchical:
-                full_metadata["hierarchical_path"] = _save_hierarchical_original(
-                    metadata=metadata,
-                    image_id=id,
-                    full_img_path=full_img_path,
-                )
-            metadata_list.append(full_metadata)
 
             print(f"Processing {filename}...")
 
-            img = cv2.imread(str(full_img_path))
+            img = cv2.imread(str(original_img_path))
             if img is None:
-                print(f"Failed to read {full_img_path}")
+                print(f"Failed to read {original_img_path}")
                 continue
 
             if local_model_path:
-                results = model(full_img_path, conf=confidence_threshold)
+                results = model(str(original_img_path), conf=confidence_threshold)
                 detections = yolo_to_detections(results)
             else:
                 from inference import get_model
 
                 model = get_model(model_id=model_id)
-                results = model.infer(str(full_img_path))[0]
+                results = model.infer(str(original_img_path))[0]
                 detections = inference_to_detections(results)
 
             for i, det in enumerate(detections):
@@ -274,17 +231,13 @@ def run_yolo_segmentation(
 
                 segment_metadata_list.append(seg_metadata)
 
-    with open(FULL_IMAGE_METADATA_PATH, "w") as f:
-        json.dump(metadata_list, f, indent=4)
-
     with open(SEGMENTED_METADATA_PATH, "w") as f:
         json.dump(segment_metadata_list, f, indent=4)
 
     print("\nProcessing complete!")
-    print(f"Full images: {len(metadata_list)}")
     print(f"Segmented images: {len(segment_metadata_list)}")
 
-    return metadata_list, segment_metadata_list
+    return [], segment_metadata_list
 
 
 def inference_to_detections(inference_result) -> list[Detection]:

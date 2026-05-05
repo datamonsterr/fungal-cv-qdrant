@@ -536,7 +536,6 @@ def plot_roc_curves(
             try:
                 fpr_arr, tpr, _ = roc_curve(labels, scores)
                 auc = roc_auc_score(labels, scores)
-                _color = ALGORITHM_COLORS.get(algo, "#2196F3")
                 lw = 2 if "f1_grid" in algo else 1.0
                 ax.plot(
                     fpr_arr,
@@ -589,8 +588,6 @@ def plot_confusion_matrices(
     axes_flat = np.array(axes).flatten()
 
     from sklearn.metrics import f1_score
-
-    _eps = 1e-9
 
     for ax, name in zip(axes_flat, top12):
         scores = strategies[name]

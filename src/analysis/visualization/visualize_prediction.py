@@ -383,7 +383,6 @@ def visualize_prediction_by_environment(
         ]
 
         for i, neighbor in enumerate(neighbors[:k], start=1):
-            _n_id = str(neighbor.get("image_id") or neighbor.get("id") or "")
             n_specy = neighbor.get("specy", "unknown")
             n_score = neighbor.get("score", 0.0)
             n_strain = neighbor.get("strain", "unknown")

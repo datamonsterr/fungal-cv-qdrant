@@ -5,8 +5,9 @@ Returns the best F1 score across all threshold strategies.
 Called by src/run.py when --experiment threshold is used.
 
 Returns:
-    dict of {f"{strategy}_{algo}": f1} for all combinations,
-    or a single float if called directly.
+    For strategy="all" or strategy="best", dict of {f"{strategy}_{algo}": f1}.
+    For a specific strategy name, returns that strategy's F1 as float.
+    Falls back to best float only when the requested strategy is missing.
 
 Direct usage:
     uv run python -m src.experiments.threshold.run
@@ -31,9 +32,9 @@ def run_accuracy(strategy: str = "best", **kwargs) -> float | Dict[str, float]:
     (run retrieve_diverse first if not).
 
     Args:
-        strategy: "best" = return max F1 across all strategies (default, float)
+        strategy: "best" = return dict of all strategies and print best strategy
                   "all"  = return dict of all {name: f1}
-                  or a specific strategy name to return its best F1
+                  or a specific strategy name to return its F1
     Returns:
         float or dict of strategy F1s. For best/all, also prints the best
         strategy name so the caller can use it as description.
@@ -128,11 +129,9 @@ def run(params: ExperimentParams) -> ExperimentResult:
             strategy_name = params.description[:30] if params.description else "threshold"
         artifact_paths: list = []
     except Exception as exc:
-        f1 = 0.0
-        strategy_name = "threshold_error"
-        artifact_paths = []
         error_log = log_dir / "run.log"
         error_log.write_text(str(exc))
+        raise
 
     result_data = {
         "f1_score": f1,

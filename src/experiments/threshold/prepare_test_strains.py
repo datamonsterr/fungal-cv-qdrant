@@ -107,7 +107,7 @@ def prepare_test_strain_images():
     with proper filenames matching the diverse_data naming convention.
     Returns list of new metadata entries.
     """
-    _split = load_strain_split()
+    load_strain_split()
     seg_meta = load_segmented_meta()
 
     # Index segmented images by (strain, env, angle, seg_idx)
@@ -211,8 +211,6 @@ def main():
     print("\nStep 3: Building retrieval list (test strains = known, others = unknown)")
     retrieval_list = []
     for entry in new_entries:
-        _strain = entry["data"]["strain"]
-        _species = entry["data"]["species"]
         is_known = 1  # test strains = known species
         retrieval_list.append(
             {

@@ -1456,7 +1456,12 @@ def regenerate_prediction_with_details(
     k = int(metadata.get("k", 7))
     environment = metadata.get("environment", "all")
     strategy = str(metadata.get("strategy", "weighted"))
-    extractor = get_extractor_by_name(feature_extractor)
+    extractor_aliases = {
+        "ColorHistogramHS": "colorhistogram_HS",
+        "ResNet50": "resnet50",
+        "EfficientNetV2B0": "efficientnetv2b0",
+    }
+    extractor = get_extractor_by_name(extractor_aliases.get(feature_extractor, feature_extractor))
     if extractor is None:
         raise ValueError(f"Unknown feature extractor: {feature_extractor}")
 

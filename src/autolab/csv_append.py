@@ -6,8 +6,11 @@ Multiple Workers can call append_row() simultaneously without data corruption.
 
 from __future__ import annotations
 
+import argparse
 import csv
+import datetime
 import fcntl
+import json
 import os
 from pathlib import Path
 from typing import Any, Sequence
@@ -55,25 +58,49 @@ def append_staircase_row(
 
     Returns the path of the CSV file written.
     """
-    import datetime
-
     if results_dir is None:
         from src.config import RESULTS_DIR
         results_dir = RESULTS_DIR
 
     csv_path = Path(results_dir) / "autoresearch" / f"{experiment}.csv"
+    csv_path.parent.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.datetime.now(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-    experiment_index = 0
-    if csv_path.exists():
-        with open(csv_path) as f:
-            rows = list(csv.reader(f))
-        data_rows = [r for r in rows if r and not r[0].startswith("experiment_index")]
-        experiment_index = len(data_rows)
-
-    append_row(
-        csv_path=csv_path,
-        row=[experiment_index, f1_score, strategy_name, run_id, timestamp],
-        header=["experiment_index", "f1_score", "strategy_name", "run_id", "timestamp"],
-    )
+    with open(csv_path, "a+", newline="") as fd:
+        fcntl.flock(fd.fileno(), fcntl.LOCK_EX)
+        try:
+            fd.seek(0)
+            rows = list(csv.reader(fd))
+            data_rows = [r for r in rows if r and r[0] != "experiment_index"]
+            experiment_index = len(data_rows)
+            fd.seek(0, os.SEEK_END)
+            writer = csv.writer(fd)
+            if not rows:
+                writer.writerow(["experiment_index", "f1_score", "strategy_name", "run_id", "timestamp"])
+            writer.writerow([experiment_index, f1_score, strategy_name, run_id, timestamp])
+            fd.flush()
+            os.fsync(fd.fileno())
+        finally:
+            fcntl.flock(fd.fileno(), fcntl.LOCK_UN)
     return csv_path
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Append one staircase CSV row")
+    parser.add_argument("--experiment", required=True)
+    parser.add_argument("--f1-score", required=True, type=float)
+    parser.add_argument("--strategy-name", required=True)
+    parser.add_argument("--run-id", required=True)
+    args = parser.parse_args()
+
+    csv_path = append_staircase_row(
+        experiment=args.experiment,
+        f1_score=args.f1_score,
+        strategy_name=args.strategy_name,
+        run_id=args.run_id,
+    )
+    print(json.dumps({"csv_path": str(csv_path)}))
+
+
+if __name__ == "__main__":
+    main()

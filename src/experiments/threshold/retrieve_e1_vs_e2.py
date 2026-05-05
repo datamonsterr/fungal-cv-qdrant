@@ -173,7 +173,6 @@ def run():
             ranked_e2 = aggregate_weighted(neighbors_e2)
 
             # Geometric mean top-3 for both
-            _eps = 1e-12
             gm3_e1 = 0.0
             if len(ranked_e1) >= 3:
                 s = [ranked_e1[i]["score"] for i in range(3)]

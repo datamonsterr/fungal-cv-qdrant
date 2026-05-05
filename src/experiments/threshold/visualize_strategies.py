@@ -182,7 +182,8 @@ def _draw_cell(
     text_y = y + h - TEXT_HEIGHT + 4
     for line, font in text_lines:
         draw.text((text_x, text_y), line, fill=(0, 0, 0), font=font)
-        text_y += 12 + 2
+        _, _, _, bottom = font.getbbox(line or "Ag")
+        text_y += max(bottom, 12) + 2
 
 
 def _make_grid(
@@ -237,7 +238,6 @@ def _make_grid(
         img = _get_thumbnail(img_path, thumb_size)
 
         is_known = int(row.get("is_known", 0))
-        _species = row.get("species_label", "")
         pred_species = row.get("predicted_species", "")
         score_val = float(scores[idx]) if idx < len(scores) else 0.0
 

@@ -139,7 +139,6 @@ def run_retrieval(resume: bool = False, limit: int | None = None):
             environment = data.get("environment", "UNKNOWN")
             angle = data.get("angle", "UNKNOWN")
             is_known = int(entry.get("is_known", 0))
-            _strain = data.get("strain", "")
 
             # Image path: use step_images.preprocessed or file_path
             step_images = entry.get("step_images", {})
