@@ -22,7 +22,6 @@ Usage:
 import argparse
 import json
 import re
-import shutil
 import sys
 import uuid
 from collections import defaultdict
@@ -35,8 +34,8 @@ import pandas as pd
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import DATASET_ROOT, relative_to_workspace
-from src.preprocessing.kmeans import segment_kmeans
+from src.config import DATASET_ROOT, relative_to_workspace  # noqa: E402
+from src.preprocessing.kmeans import segment_kmeans  # noqa: E402
 
 # Constants
 IMG_SIZE = 256
@@ -477,7 +476,7 @@ def process_pipeline(diverse_images_path: Path, metadata_path: Path, limit: int 
     with open(metadata_path, "w") as f:
         json.dump({"images": all_metadata}, f, indent=2)
 
-    print(f"\nPipeline complete!")
+    print("\nPipeline complete!")
     print(f"Total images processed: {len(all_metadata)}")
     print(f"Metadata saved to: {metadata_path}")
 

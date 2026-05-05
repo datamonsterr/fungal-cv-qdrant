@@ -19,7 +19,6 @@ from __future__ import annotations
 
 import csv
 import json
-import math
 import sys
 from pathlib import Path
 from typing import Dict, Tuple
@@ -29,7 +28,7 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import RESULTS_DIR
+from src.config import RESULTS_DIR  # noqa: E402
 
 INPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
 OUTPUT_DIR = RESULTS_DIR / "threshold"
@@ -550,7 +549,7 @@ def run():
     print(f"\n{'=' * 65}")
     print(f"Total experiments: {total}")
 
-    print(f"\n=== Best F1 per algorithm ===")
+    print("\n=== Best F1 per algorithm ===")
     for algo in ALGORITHMS:
         algo_rows = [r for r in all_results if r["algorithm"] == algo]
         if not algo_rows:
@@ -562,7 +561,7 @@ def run():
         )
 
     b = best_overall
-    print(f"\n=== Overall best ===")
+    print("\n=== Overall best ===")
     print(f"  {b['strategy']}_{b['algorithm']}: F1={b['f1']:.4f}")
     print(
         f"  Precision={b['precision']:.4f}  Recall={b['recall']:.4f}  Specificity={b['specificity']:.4f}"
@@ -571,7 +570,7 @@ def run():
     print(f"  Threshold={b['threshold']:.6f}")
 
     # Top-20 by f1_grid
-    print(f"\n=== Top-20 (f1_grid) ===")
+    print("\n=== Top-20 (f1_grid) ===")
     ranked = sorted(
         [r for r in all_results if r["algorithm"] == "f1_grid"],
         key=lambda r: float(r["f1"]),

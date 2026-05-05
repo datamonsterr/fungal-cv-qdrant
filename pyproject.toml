@@ -41,6 +41,7 @@ dev = [
     "isort",
     "flake8",
     "mypy",
+    "ruff>=0.15.12",
 ]
 
 [tool.isort]

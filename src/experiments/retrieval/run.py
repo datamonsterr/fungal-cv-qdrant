@@ -11,6 +11,7 @@ import csv
 import json
 import os
 from collections import Counter, defaultdict
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence, Tuple
@@ -73,14 +74,16 @@ def get_all_images_for_strain(
     environment: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Fetch all points for one strain (optionally filtered by environment)."""
-    conditions = [FieldCondition(key="strain", match=MatchValue(value=strain))]
+    conditions: list[FieldCondition | Filter] = [
+        FieldCondition(key="strain", match=MatchValue(value=strain))
+    ]
 
     if environment and environment.lower() != "all":
         conditions.append(
             FieldCondition(key="environment", match=MatchValue(value=environment))
         )
 
-    search_filter = Filter(must=conditions)
+    search_filter = Filter(must=list(conditions))
 
     all_images: List[Dict[str, Any]] = []
     offset = None
@@ -95,7 +98,7 @@ def get_all_images_for_strain(
         )
 
         for point in points:
-            payload = point.payload
+            payload = point.payload or {}
             all_images.append(
                 {
                     "image_id": payload.get("image_id"),
@@ -134,8 +137,8 @@ def aggregate_predictions(
     del k
     del min_samples
 
-    species_scores = Counter()
-    species_counts = Counter()
+    species_scores: Counter[str] = Counter()
+    species_counts: Counter[str] = Counter()
 
     for result in all_results:
         neighbors = result["neighbors"]
@@ -701,9 +704,9 @@ def run_species_evaluation(
     collection_name: str,
     feature_extractor: FeatureExtractor,
     k: int = 5,
-    min_samples: int = None,
+    min_samples: Optional[int] = None,
     without_siblings: bool = True,
-    environment: str = None,
+    environment: Optional[str] = None,
     strategy: str = "weighted",
     output_dir: str = str(RESULTS_DIR),
     generate_visualizations: bool = False,
@@ -1040,8 +1043,80 @@ __all__ = [
     "run_ensemble_report",
     "run_species_evaluation",
     "write_evaluation_csv",
+    "ExperimentParams",
+    "ExperimentResult",
+    "run",
 ]
 
 
 if __name__ == "__main__":
     main()
+
+
+@dataclass
+class ExperimentParams:
+    run_id: str
+    output_root: str
+    description: str
+
+
+@dataclass
+class ExperimentResult:
+    f1_score: float
+    strategy_name: str
+    artifact_paths: list
+    run_id: str
+
+
+def run(params: ExperimentParams) -> ExperimentResult:
+    """Execute one retrieval experiment run scoped to params.output_root."""
+    import json
+    from pathlib import Path as _Path
+
+    output_root = _Path(params.output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    log_dir = output_root / "log"
+    log_dir.mkdir(exist_ok=True)
+
+    try:
+        from src.config import COLLECTION_NAME, QDRANT_API_KEY, QDRANT_URL
+        from qdrant_client import QdrantClient as _QC
+
+        client = _QC(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+        extractor = get_extractor_by_name("resnet50")
+        if extractor is None:
+            raise ValueError("resnet50 extractor unavailable")
+        results, report_path = run_species_evaluation(
+            client=client,
+            collection_name=COLLECTION_NAME,
+            feature_extractor=extractor,
+            output_dir=str(output_root / "artifacts"),
+        )
+        correct = sum(1 for r in results if r.get("correct", False))
+        total = len(results)
+        f1 = correct / total if total > 0 else 0.0
+        strategy_name = params.description[:30] if params.description else "retrieval"
+        artifact_paths = [str(output_root / "artifacts")]
+    except Exception as exc:
+        f1 = 0.0
+        strategy_name = "retrieval_error"
+        artifact_paths = []
+        error_log = log_dir / "run.log"
+        error_log.write_text(str(exc))
+
+    result_data = {
+        "f1_score": f1,
+        "strategy_name": strategy_name,
+        "artifact_paths": artifact_paths,
+        "run_id": params.run_id,
+    }
+    results_json = output_root / "results.json"
+    results_json.write_text(json.dumps(result_data, indent=2))
+    artifact_paths = [str(p) for p in artifact_paths] + [str(results_json)]
+
+    return ExperimentResult(
+        f1_score=f1,
+        strategy_name=strategy_name,
+        artifact_paths=artifact_paths,
+        run_id=params.run_id,
+    )
