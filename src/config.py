@@ -5,6 +5,7 @@ from pathlib import Path
 def _default_workspace_root() -> Path:
     project_root = Path(__file__).resolve().parent.parent
     parent = project_root.parent
+    grandparent = parent.parent
     monorepo_markers = (
         "Dataset",
         "results",
@@ -17,10 +18,13 @@ def _default_workspace_root() -> Path:
         "CLAUDE.md",
     )
 
-    if project_root.name == "fungal-cv-qdrant" and any(
-        (parent / marker).exists() for marker in monorepo_markers
-    ):
-        return parent
+    if project_root.name == "fungal-cv-qdrant":
+        if any((parent / marker).exists() for marker in monorepo_markers):
+            return parent
+        if parent.name == "repos" and any(
+            (grandparent / marker).exists() for marker in monorepo_markers
+        ):
+            return grandparent
 
     return project_root
 

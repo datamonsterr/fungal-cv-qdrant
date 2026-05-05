@@ -2,8 +2,8 @@
 
 This repository now follows a multi-experiment autoresearch-style layout.
 Core code remains under `src/`, with per-experiment checks colocated under each experiment folder.
-The retrieval system in `mycoai_retrieval_backend/` and
-`mycoai_retrieval_frontend/` consumes validated outputs from
+The retrieval system in `repos/mycoai_retrieval_backend/` and
+`repos/mycoai_retrieval_frontend/` consumes validated outputs from
 `src/experiments/retrieval/` and `src/experiments/kmeans_segmentation/`.
 
 This repository is expected to live inside the parent monorepo at `/home/dat/dev/mycoai/`.
@@ -14,7 +14,7 @@ Shared runtime paths now live outside this submodule:
 - `../weights/`
 - `../species_weights.json`
 
-`src/config.py` resolves those parent-level paths automatically when this repository is used as the `fungal-cv-qdrant/` submodule.
+`src/config.py` resolves those parent-level paths automatically when this repository is used as the `repos/fungal-cv-qdrant/` submodule.
 
 ## High-Level Workflow
 
