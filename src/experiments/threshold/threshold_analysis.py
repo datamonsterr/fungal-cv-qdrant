@@ -46,7 +46,7 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import RESULTS_DIR
+from src.config import RESULTS_DIR  # noqa: E402
 
 INPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
 OUTPUT_DIR = RESULTS_DIR / "threshold"
@@ -536,7 +536,6 @@ def plot_roc_curves(
             try:
                 fpr_arr, tpr, _ = roc_curve(labels, scores)
                 auc = roc_auc_score(labels, scores)
-                color = ALGORITHM_COLORS.get(algo, "#2196F3")
                 lw = 2 if "f1_grid" in algo else 1.0
                 ax.plot(
                     fpr_arr,
@@ -589,8 +588,6 @@ def plot_confusion_matrices(
     axes_flat = np.array(axes).flatten()
 
     from sklearn.metrics import f1_score
-
-    eps = 1e-9
 
     for ax, name in zip(axes_flat, top12):
         scores = strategies[name]

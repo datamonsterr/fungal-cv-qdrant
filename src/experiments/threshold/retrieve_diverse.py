@@ -28,14 +28,14 @@ import os
 import sys
 from collections import defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, cast
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-import cv2
+import cv2  # noqa: E402
 
-from src.config import (
+from src.config import (  # noqa: E402
     DATASET_ROOT,
     QDRANT_API_KEY,
     QDRANT_URL,
@@ -43,17 +43,17 @@ from src.config import (
     WORKSPACE_ROOT,
     SEGMENTED_IMAGE_DIR,
 )
-from src.experiments.feature_extraction.feature_extractors import (
+from src.experiments.feature_extraction.feature_extractors import (  # noqa: E402
     EfficientNetB1FinetunedExtractor,
 )
-from src.analysis.visualization.visualize_prediction import (
+from src.analysis.visualization.visualize_prediction import (  # noqa: E402
     visualize_prediction_by_environment,
 )
-from src.experiments.retrieval.run import (
+from src.experiments.retrieval.run import (  # noqa: E402
     aggregate_predictions,
     load_strain_to_species_mapping,
 )
-from src.utils.list_env import get_environment_list
+from src.utils.list_env import get_environment_list  # noqa: E402
 
 # Override: use local Docker Qdrant when env var is unset (defaults to cloud URL)
 _qdrant_url = QDRANT_URL
@@ -151,7 +151,7 @@ def aggregate_weighted(neighbors: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     total_weight = sum(totals.values()) or 1.0
     ranked = sorted(
         [{"species": sp, "score": s / total_weight} for sp, s in totals.items()],
-        key=lambda x: x["score"],
+        key=lambda x: float(cast(float, x["score"])),
         reverse=True,
     )
     return ranked
@@ -161,7 +161,7 @@ def check_qdrant(client: QdrantClient) -> bool:
     """Check if the collection exists and has data."""
     try:
         info = client.get_collection(COLLECTION)
-        count = info.points_count
+        count = info.points_count or 0
         print(f"  Qdrant collection '{COLLECTION}': {count} points")
         return count > 0
     except Exception as exc:

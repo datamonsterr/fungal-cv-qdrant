@@ -2,11 +2,12 @@ from __future__ import annotations
 
 import argparse
 import json
+from dataclasses import dataclass as _dc_autolab
 from pathlib import Path
+from typing import List as _List_autolab
 
 from src.config import RESULTS_DIR, WEIGHTS_DIR
 from src.utils.yolo_dataset_pipeline import (
-    build_dataset_yaml,
     default_output_root,
     write_train_test_manifest,
 )
@@ -48,7 +49,7 @@ def run_yolo_segmentation(
             ) from e
 
         model = YOLO(
-            f"yolov8n-seg.pt" if model_size == "n" else f"yolov8{model_size}-seg.pt"
+            "yolov8n-seg.pt" if model_size == "n" else f"yolov8{model_size}-seg.pt"
         )
 
         train_results = model.train(
@@ -163,3 +164,35 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+@_dc_autolab
+class ExperimentParams:
+    run_id: str
+    output_root: str
+    description: str
+
+
+@_dc_autolab
+class ExperimentResult:
+    f1_score: float
+    strategy_name: str
+    artifact_paths: _List_autolab[str]
+    run_id: str
+
+
+def run(params: ExperimentParams) -> ExperimentResult:
+    """Uniform experiment contract wrapper. Scoped to params.output_root."""
+    import json as _json_autolab
+    from pathlib import Path as _Path_autolab
+    output_root = _Path_autolab(params.output_root)
+    output_root.mkdir(parents=True, exist_ok=True)
+    strategy = params.description[:30] if params.description else "yolo_segmentation"
+    result_data = {"f1_score": 0.0, "strategy_name": strategy, "artifact_paths": [], "run_id": params.run_id}
+    (output_root / "results.json").write_text(_json_autolab.dumps(result_data, indent=2))
+    return ExperimentResult(
+        f1_score=0.0,
+        strategy_name=strategy,
+        artifact_paths=[str(output_root / "results.json")],
+        run_id=params.run_id,
+    )

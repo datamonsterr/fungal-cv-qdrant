@@ -14,29 +14,31 @@ import csv
 import json
 import sys
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import (
+import os  # noqa: E402
+
+import cv2  # noqa: E402
+from qdrant_client import QdrantClient  # noqa: E402
+
+from src.config import (  # noqa: E402
     DATASET_ROOT,
     QDRANT_API_KEY,
     QDRANT_URL,
     RESULTS_DIR,
     WORKSPACE_ROOT,
 )
-import os
 
 _qdrant_url = QDRANT_URL
 if not os.getenv("QDRANT_URL") or "cloud.qdrant" in _qdrant_url:
     _qdrant_url = "http://localhost:6333"
 
-import cv2
-from src.experiments.feature_extraction.feature_extractors import (
+from src.experiments.feature_extraction.feature_extractors import (  # noqa: E402
     EfficientNetB1FinetunedExtractor,
 )
-from qdrant_client import QdrantClient
 
 DIVERSE_METADATA_PATH = DATASET_ROOT / "diverse_data" / "diverse_data_metadata.json"
 COLLECTION = "myco_fungi_features_full_finetuned"
@@ -171,7 +173,6 @@ def run():
             ranked_e2 = aggregate_weighted(neighbors_e2)
 
             # Geometric mean top-3 for both
-            eps = 1e-12
             gm3_e1 = 0.0
             if len(ranked_e1) >= 3:
                 s = [ranked_e1[i]["score"] for i in range(3)]

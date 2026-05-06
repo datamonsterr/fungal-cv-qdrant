@@ -15,7 +15,7 @@ import csv
 import os
 import sys
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple, cast
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -23,7 +23,7 @@ from PIL import Image, ImageDraw, ImageFont
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import RESULTS_DIR, WORKSPACE_ROOT
+from src.config import RESULTS_DIR, WORKSPACE_ROOT  # noqa: E402
 
 INPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
 OUTPUT_DIR = RESULTS_DIR / "threshold" / "strategy_visualizations"
@@ -36,7 +36,7 @@ OUTPUT_DIR = RESULTS_DIR / "threshold" / "strategy_visualizations"
 
 def load_results(
     csv_path: Path,
-) -> Tuple[List[Dict], np.ndarray, Dict[str, np.ndarray]]:
+) -> Tuple[List[Dict[str, Any]], np.ndarray, np.ndarray]:
     """
     Returns:
         rows       : list of dicts (CSV rows)
@@ -116,13 +116,13 @@ GRID_COLS = 6
 
 def _load_font(size: int) -> ImageFont.ImageFont:
     for path in [
-        f"/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-        f"/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+        "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf",
         "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
     ]:
         if os.path.exists(path):
-            return ImageFont.truetype(path, size)
-    return ImageFont.load_default()
+            return cast(ImageFont.ImageFont, ImageFont.truetype(path, size))
+    return cast(ImageFont.ImageFont, ImageFont.load_default())
 
 
 def _get_thumbnail(img_path: str, size: Tuple[int, int]) -> Optional[Image.Image]:
@@ -130,7 +130,7 @@ def _get_thumbnail(img_path: str, size: Tuple[int, int]) -> Optional[Image.Image
         return None
     try:
         img = Image.open(img_path).convert("RGB")
-        img = img.resize(size, Image.LANCZOS)
+        img = img.resize(size, Image.Resampling.LANCZOS)
         return img
     except Exception:
         return None
@@ -159,7 +159,7 @@ def _draw_cell(
     img_area_h = h - TEXT_HEIGHT - 2 * CELL_PADDING
 
     if img:
-        img_display = img.resize((img_area_w, img_area_h), Image.LANCZOS)
+        img_display = img.resize((img_area_w, img_area_h), Image.Resampling.LANCZOS)
         canvas.paste(img_display, (img_area_x, img_area_y))
     else:
         draw.rectangle(
@@ -182,7 +182,8 @@ def _draw_cell(
     text_y = y + h - TEXT_HEIGHT + 4
     for line, font in text_lines:
         draw.text((text_x, text_y), line, fill=(0, 0, 0), font=font)
-        text_y += font.size + 2
+        _, _, _, bottom = font.getbbox(line or "Ag")
+        text_y += max(bottom, 12) + 2
 
 
 def _make_grid(
@@ -195,8 +196,8 @@ def _make_grid(
     thumb_size: Tuple[int, int] = THUMB_SIZE,
     max_cols: int = GRID_COLS,
     max_rows: int = 6,
-    font_bold: ImageFont.ImageFont = None,
-    font_small: ImageFont.ImageFont = None,
+    font_bold: ImageFont.ImageFont | None = None,
+    font_small: ImageFont.ImageFont | None = None,
 ) -> Tuple[Optional[Image.Image], int]:
     """
     Build a grid of sample thumbnails for one group (TP/FP/TN/FN).
@@ -204,6 +205,10 @@ def _make_grid(
     """
     if not samples:
         return None, 0
+    if font_bold is None:
+        font_bold = _load_font(13)
+    if font_small is None:
+        font_small = _load_font(10)
 
     n = len(samples)
     cols = min(max_cols, n)
@@ -233,7 +238,6 @@ def _make_grid(
         img = _get_thumbnail(img_path, thumb_size)
 
         is_known = int(row.get("is_known", 0))
-        species = row.get("species_label", "")
         pred_species = row.get("predicted_species", "")
         score_val = float(scores[idx]) if idx < len(scores) else 0.0
 
@@ -250,7 +254,7 @@ def _make_grid(
 
 
 def visualize_strategy(
-    rows: List[Dict],
+    rows: List[Dict[str, Any]],
     scores: np.ndarray,
     labels: np.ndarray,
     threshold: float,
@@ -349,7 +353,7 @@ def main() -> None:
     rows, labels, scores_arr = load_results(INPUT_CSV)
     strategy_scores = compute_strategy_scores(scores_arr)
 
-    print(f"\nGenerating per-strategy visualizations...\n")
+    print("\nGenerating per-strategy visualizations...\n")
 
     for (strategy, algorithm), threshold in BEST_THRESHOLDS.items():
         print(f"Strategy: {strategy} ({algorithm})")

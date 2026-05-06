@@ -11,8 +11,6 @@ Usage:
 from __future__ import annotations
 
 import csv
-import json
-import os
 import sys
 from pathlib import Path
 from typing import Any, Dict, List
@@ -22,7 +20,7 @@ import numpy as np
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import DATASET_ROOT, RESULTS_DIR
+from src.config import DATASET_ROOT, RESULTS_DIR  # noqa: E402
 
 INPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
 OUTPUT_DIR = RESULTS_DIR / "threshold" / "strategy_viz"
@@ -103,7 +101,6 @@ def build_prediction_result(
     )
 
     gm3 = compute_gm3(scores)
-    s0 = scores[0]
 
     # Neighbors: top-5 from the CSV columns
     neighbors = []
@@ -164,7 +161,6 @@ def run_visualization():
 
     rows = load_csv()
     n = len(rows)
-    labels = np.array([int(r["is_known"]) for r in rows])
 
     # Pre-compute score matrix
     all_scores = np.zeros((n, 5))

@@ -13,19 +13,18 @@ Usage:
 from __future__ import annotations
 
 import csv
-import itertools
 import json
 import math
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 import numpy as np
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import RESULTS_DIR
+from src.config import RESULTS_DIR  # noqa: E402
 
 INPUT_CSV = RESULTS_DIR / "threshold" / "diverse_retrieval_results.csv"
 OUTPUT_DIR = RESULTS_DIR / "threshold"
@@ -259,7 +258,6 @@ def generate_formulas(scores: np.ndarray) -> Dict[str, np.ndarray]:
     gnorm_0_3 = (s[:, 0] - s[:, 3]) / (s[:, 0] + s[:, 3] + eps)
     gnorm_0_4 = (s[:, 0] - s[:, 4]) / (s[:, 0] + s[:, 4] + eps)
     gnorm_1_2 = (s[:, 1] - s[:, 2]) / (s[:, 1] + s[:, 2] + eps)
-    gnorm_1_3 = (s[:, 1] - s[:, 3]) / (s[:, 1] + s[:, 3] + eps)
     formulas["gnorm_0_2_x_gnorm_0_3"] = gnorm_0_2 * gnorm_0_3
     formulas["gnorm_0_2_x_gnorm_0_4"] = gnorm_0_2 * gnorm_0_4
     formulas["gnorm_0_3_x_gnorm_0_4"] = gnorm_0_3 * gnorm_0_4
@@ -518,7 +516,7 @@ def run():
     print(f"Saved {total} experiments to {results_csv}")
     print(f"\n{'=' * 65}")
     print(f"Total experiments run: {total}")
-    print(f"\n=== Best F1 per algorithm ===")
+    print("\n=== Best F1 per algorithm ===")
     for algo in ALGORITHMS:
         algo_rows = [r for r in all_results if r["algorithm"] == algo]
         if not algo_rows:
@@ -529,7 +527,7 @@ def run():
             f"[t={float(best['threshold']):.4f}]"
         )
 
-    print(f"\n=== Overall best (across all strategies × algorithms) ===")
+    print("\n=== Overall best (across all strategies × algorithms) ===")
     b = best_overall
     print(f"  {b['strategy']}_{b['algorithm']}: F1={b['f1']:.4f}")
     print(
@@ -561,7 +559,7 @@ def run():
     print(f"\nBest strategy: {best_path}")
 
     # Top-20 by f1_grid
-    print(f"\n=== Top-20 (f1_grid) ===")
+    print("\n=== Top-20 (f1_grid) ===")
     ranked = sorted(
         [r for r in all_results if r["algorithm"] == "f1_grid"],
         key=lambda r: float(r["f1"]),

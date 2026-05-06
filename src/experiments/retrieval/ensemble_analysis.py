@@ -7,7 +7,7 @@ import csv
 import json
 import os
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, DefaultDict, Dict, List, Optional, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -117,14 +117,14 @@ def load_species_weights(json_path: str) -> SpeciesWeights:
     return weights
 
 
-def load_accuracy_from_csv(csv_path: str) -> Dict[str, AccuracyData]:
+def load_accuracy_from_csv(csv_path: str) -> Dict[Tuple[str, str, str], AccuracyData]:
     """
     Load accuracy data from comprehensive CSV.
 
     Returns:
         Dictionary mapping (feature_extractor, env_strategy, agg_strategy) to AccuracyData
     """
-    accuracy_dict = {}
+    accuracy_dict: Dict[Tuple[str, str, str], AccuracyData] = {}
 
     with open(csv_path, "r") as f:
         # Skip comment lines starting with #
@@ -1147,7 +1147,7 @@ def combine_aggregated_results(
     Returns:
         List of (species, combined_score) sorted by score descending
     """
-    species_scores = defaultdict(float)
+    species_scores: DefaultDict[str, float] = defaultdict(float)
     total_weight = sum(weight for _, weight in predictions)
     num_models = len(predictions)
 
@@ -1229,7 +1229,7 @@ def combine_aggregated_results(
 
 def evaluate_ensemble(
     results_dict: Dict[str, EvaluationResults],
-    accuracy_dict: Dict[str, AccuracyData],
+    accuracy_dict: Dict[Tuple[str, str, str], AccuracyData],
     feature_extractors: List[str],
     env_strategy: str = "E2",
     agg_strategy: str = "S1",
@@ -1256,7 +1256,7 @@ def evaluate_ensemble(
         Dictionary with ensemble evaluation results
     """
     # Get weights from accuracy
-    weights = {}
+    weights: Dict[str, float] = {}
     for fe in feature_extractors:
         key = (fe, env_strategy, agg_strategy)
         if key in accuracy_dict:
@@ -1277,18 +1277,18 @@ def evaluate_ensemble(
         print(f"  {fe}: {w:.4f}")
 
     # Create lookup for predictions by (strain, test_set_index)
-    predictions_by_key = defaultdict(dict)
+    predictions_by_key: DefaultDict[tuple[str, int], Dict[str, PredictionResult]] = defaultdict(dict)
 
     for fe, results in results_dict.items():
         for pred in results.predictions:
-            key = (pred.strain, pred.test_set_index)
-            predictions_by_key[key][fe] = pred
+            prediction_key: tuple[str, int] = (pred.strain, pred.test_set_index)
+            predictions_by_key[prediction_key][fe] = pred
 
     # Combine predictions
-    ensemble_predictions = []
+    ensemble_predictions: List[Dict[str, Any]] = []
     correct_count = 0
 
-    for key, preds in predictions_by_key.items():
+    for prediction_key, preds in predictions_by_key.items():
         # Check if we have all models for this key
         if len(preds) != len(feature_extractors):
             continue
@@ -1445,45 +1445,49 @@ def regenerate_prediction_with_details(
     """
     from qdrant_client import QdrantClient
 
-    from src.experiments.retrieval.run import predict
+    from src.experiments.retrieval.run import get_extractor_by_name, predict_segment_group
 
     # Single collection with multiple named vectors
     COLLECTION_NAME = "myco_fungi_features_full"
 
-    # Vector name mapping (based on feature extractors in upload_qdrant.py)
-    VECTOR_NAME_MAPPING = {
+    # Create Qdrant client (default localhost:6333)
+    qdrant_client = QdrantClient(host="localhost", port=6333)
+
+    k = int(metadata.get("k", 7))
+    environment = metadata.get("environment", "all")
+    strategy = str(metadata.get("strategy", "weighted"))
+    extractor_aliases = {
         "ColorHistogramHS": "colorhistogram_HS",
         "ResNet50": "resnet50",
         "EfficientNetV2B0": "efficientnetv2b0",
     }
-
-    vector_name = VECTOR_NAME_MAPPING.get(feature_extractor)
-    if not vector_name:
+    extractor = get_extractor_by_name(extractor_aliases.get(feature_extractor, feature_extractor))
+    if extractor is None:
         raise ValueError(f"Unknown feature extractor: {feature_extractor}")
 
-    # Create Qdrant client (default localhost:6333)
-    qdrant_client = QdrantClient(host="localhost", port=6333)
+    from src.experiments.retrieval.run import collect_testset
 
-    # Run prediction with full details
-    k = metadata.get("k", 7)
-    environment = metadata.get("environment", "all")
-    strategy = metadata.get("strategy", "weighted")
-
-    result = predict(
-        query_strain=strain,
-        qdrant_client=qdrant_client,
+    test_sets = collect_testset(
+        client=qdrant_client,
         collection_name=COLLECTION_NAME,
-        vector_name=vector_name,
+        strain=strain,
+        environment_strategy=str(environment or "E1"),
+    )
+    if test_set_index >= len(test_sets):
+        raise IndexError(f"test_set_index out of range: {test_set_index}")
+
+    return predict_segment_group(
+        client=qdrant_client,
+        collection_name=COLLECTION_NAME,
+        test_group=test_sets[test_set_index],
+        strain=strain,
+        feature_extractor=extractor,
         k=k,
-        environment=environment if environment != "all" else None,
         min_samples=None,
         without_siblings=True,
-        feature_extractor=feature_extractor,
-        aggregation_strategy=strategy,
-        test_set_index=test_set_index,
+        environment=environment if environment != "all" else None,
+        strategy=strategy,
     )
-
-    return result
 
 
 def visualize_complementary_cases(
@@ -1548,7 +1552,7 @@ def visualize_complementary_cases(
                 )
                 visualize_prediction_by_environment(
                     prediction_result=result,
-                    segmented_image_dir=SEGMENTED_IMAGE_DIR,
+                    segmented_image_dir=str(SEGMENTED_IMAGE_DIR),
                     output_path=output_path,
                     k=k,
                 )
@@ -1581,7 +1585,7 @@ def visualize_complementary_cases(
                 )
                 visualize_prediction_by_environment(
                     prediction_result=result,
-                    segmented_image_dir=SEGMENTED_IMAGE_DIR,
+                    segmented_image_dir=str(SEGMENTED_IMAGE_DIR),
                     output_path=output_path,
                     k=k,
                 )
@@ -1610,7 +1614,7 @@ def visualize_complementary_cases(
             )
             visualize_prediction_by_environment(
                 prediction_result=result,
-                segmented_image_dir=SEGMENTED_IMAGE_DIR,
+                segmented_image_dir=str(SEGMENTED_IMAGE_DIR),
                 output_path=output_path,
                 k=k,
             )

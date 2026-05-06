@@ -21,6 +21,7 @@ from __future__ import annotations
 import argparse
 import csv
 import importlib
+import json
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -28,9 +29,9 @@ from textwrap import dedent
 from typing import Any, Dict, List, Optional
 
 import matplotlib
-from src.config import PROJECT_ROOT, RESULTS_DIR
-
 import matplotlib.pyplot as plt
+
+from src.config import RESULTS_DIR
 
 matplotlib.use("Agg")
 
@@ -158,8 +159,6 @@ class ExperimentHistory:
         Add a new result. accuracy can be a float or a dict of {strategy_algo: f1}.
         Returns (is_new_best, attempt_number).
         """
-        import json
-
         if isinstance(accuracy, dict):
             acc_str = json.dumps(accuracy, sort_keys=True)
             max_f1 = max(round(v, 6) for v in accuracy.values()) if accuracy else 0.0
@@ -211,8 +210,6 @@ def plot_autoresearch_chart(experiment: str, history: ExperimentHistory) -> Path
     attempts = [int(r["attempt"]) for r in rows]
 
     # Detect if this experiment stores dict of F1s (any row with dict = multi-line mode)
-    import json
-
     any_dict = False
     all_keys: List[str] = []
     for r in rows:
@@ -296,7 +293,6 @@ def _plot_threshold_all_experiments(ax, all_exp_csv: Path) -> None:
         return
 
     n = len(rows)
-    xs = list(range(n))
 
     # Compute running best and classify dots
     gray_x, gray_y = [], []
@@ -363,8 +359,6 @@ def _plot_threshold_all_experiments(ax, all_exp_csv: Path) -> None:
 
 def _plot_dict_staircase(ax, rows, attempts) -> None:
     """Fallback dict plotting: best-per-attempt dots + green staircase."""
-    import json
-
     best_per_attempt: List[float] = []
     best_key_per_attempt: List[str] = []
     for r in rows:
@@ -711,7 +705,7 @@ def main(argv: Optional[List[str]] = None) -> None:
         best = max(accuracy.values())
         top5 = sorted(accuracy.items(), key=lambda x: -x[1])[:5]
         print(f"Best F1:     {best:.4f} ({best:.2%})")
-        print(f"Top strategies:")
+        print("Top strategies:")
         for name, f1 in top5:
             print(f"  {name}: {f1:.4f}")
     else:
@@ -739,8 +733,6 @@ def _log_threshold_result(
     description: str,
 ) -> None:
     """Append a concise log entry to results/threshold/log/."""
-    import json
-
     log_dir = RESULTS_DIR / "threshold" / "log"
     log_dir.mkdir(parents=True, exist_ok=True)
     log_path = log_dir / "experiments.log"

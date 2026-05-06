@@ -34,7 +34,7 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import DATASET_ROOT, RESULTS_DIR, WORKSPACE_ROOT, relative_to_workspace
+from src.config import DATASET_ROOT, RESULTS_DIR, WORKSPACE_ROOT, relative_to_workspace  # noqa: E402
 
 DIVERSE_DATA_ROOT = DATASET_ROOT / "diverse_data"
 DIVERSE_IMAGES = DIVERSE_DATA_ROOT / "images"
@@ -107,7 +107,7 @@ def prepare_test_strain_images():
     with proper filenames matching the diverse_data naming convention.
     Returns list of new metadata entries.
     """
-    split = load_strain_split()
+    load_strain_split()
     seg_meta = load_segmented_meta()
 
     # Index segmented images by (strain, env, angle, seg_idx)
@@ -209,11 +209,8 @@ def main():
     print(f"  Saved combined metadata to: {combined_meta_path}")
 
     print("\nStep 3: Building retrieval list (test strains = known, others = unknown)")
-    test_strain_set = TEST_STRAINS
     retrieval_list = []
     for entry in new_entries:
-        strain = entry["data"]["strain"]
-        species = entry["data"]["species"]
         is_known = 1  # test strains = known species
         retrieval_list.append(
             {
@@ -224,7 +221,6 @@ def main():
         )
 
     # Add existing diverse_data images as unknown
-    existing_ids = {e["id"] for e in new_entries}
     for img in existing["images"]:
         retrieval_list.append(
             {
@@ -254,9 +250,9 @@ def main():
     for sp, count in sorted(by_species.items()):
         print(f"  {sp}: {count} images")
 
-    print(f"\nNext: Run retrieval with train=True filter in Qdrant:")
-    print(f"  uv run python -m src.experiments.threshold.retrieve_with_train_filter")
-    print(f"  Then: uv run python -m src.experiments.threshold.threshold_analysis")
+    print("\nNext: Run retrieval with train=True filter in Qdrant:")
+    print("  uv run python -m src.experiments.threshold.retrieve_with_train_filter")
+    print("  Then: uv run python -m src.experiments.threshold.threshold_analysis")
 
 
 if __name__ == "__main__":

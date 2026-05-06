@@ -16,26 +16,31 @@ import csv
 import json
 import sys
 from pathlib import Path
-from typing import Any
 
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.config import QDRANT_API_KEY, QDRANT_URL, RESULTS_DIR, WORKSPACE_ROOT
-import os
+import os  # noqa: E402
+
+import cv2  # noqa: E402
+
+from src.config import QDRANT_API_KEY, QDRANT_URL, RESULTS_DIR, WORKSPACE_ROOT  # noqa: E402
+from src.experiments.feature_extraction.feature_extractors import (  # noqa: E402
+    EfficientNetB1FinetunedExtractor,
+)
 
 _qdrant_url = QDRANT_URL
 if not os.getenv("QDRANT_URL") or "cloud.qdrant" in _qdrant_url:
     _qdrant_url = "http://localhost:6333"
 
-import cv2
-from src.experiments.feature_extraction.feature_extractors import (
-    EfficientNetB1FinetunedExtractor,
-)
 
 try:
-    from qdrant_client import QdrantClient
-    from qdrant_client.models import Filter, FieldCondition, MatchValue, MatchAny
+    from qdrant_client import QdrantClient  # noqa: E402
+    from qdrant_client.models import (  # noqa: E402
+        FieldCondition,
+        Filter,
+        MatchValue,
+    )
 except ImportError:
     print("ERROR: qdrant_client not installed.")
     sys.exit(1)
@@ -88,7 +93,7 @@ def load_done_ids(csv_path: Path) -> set:
         return {row["sample_id"] for row in csv.DictReader(f)}
 
 
-def run_retrieval(resume: bool = False, limit: int = None):
+def run_retrieval(resume: bool = False, limit: int | None = None):
     OUTPUT_CSV.parent.mkdir(parents=True, exist_ok=True)
 
     # Load retrieval list
@@ -134,7 +139,6 @@ def run_retrieval(resume: bool = False, limit: int = None):
             environment = data.get("environment", "UNKNOWN")
             angle = data.get("angle", "UNKNOWN")
             is_known = int(entry.get("is_known", 0))
-            strain = data.get("strain", "")
 
             # Image path: use step_images.preprocessed or file_path
             step_images = entry.get("step_images", {})
