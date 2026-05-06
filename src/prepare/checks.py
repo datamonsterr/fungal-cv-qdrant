@@ -4,7 +4,7 @@ from typing import Tuple
 from qdrant_client import QdrantClient
 
 from src.config import (
-    PREPARED_SEGMENTS_METADATA_PATH,
+    COLLECTION_METADATA_PATHS,
     QDRANT_API_KEY,
     QDRANT_URL,
 )
@@ -25,12 +25,31 @@ def check_dataset_root(paths: list[Path] | None = None) -> Tuple[bool, str]:
     return True, f"Dataset source roots are ready: {ready}"
 
 
-def check_metadata_exists(path: Path = PREPARED_SEGMENTS_METADATA_PATH) -> Tuple[bool, str]:
-    if not path.exists():
-        return False, f"Segmented metadata file missing: {path}"
-    if path.stat().st_size == 0:
-        return False, f"Segmented metadata file is empty: {path}"
-    return True, f"Segmented metadata looks present: {path}"
+def check_metadata_exists(
+    path: Path | None = None,
+    collection_keys: list[str] | None = None,
+) -> Tuple[bool, str]:
+    if path is not None:
+        metadata_paths = [path]
+    elif collection_keys is not None:
+        metadata_paths = [
+            COLLECTION_METADATA_PATHS[k]
+            for k in collection_keys
+            if k in COLLECTION_METADATA_PATHS
+        ]
+    else:
+        metadata_paths = list(COLLECTION_METADATA_PATHS.values())
+
+    present: list[str] = []
+    missing: list[str] = []
+    for mp in metadata_paths:
+        if mp.exists() and mp.stat().st_size > 0:
+            present.append(str(mp))
+        else:
+            missing.append(str(mp))
+    if missing:
+        return False, f"Metadata files missing or empty: {', '.join(missing)}"
+    return True, f"Metadata files present: {', '.join(present)}"
 
 
 def check_qdrant() -> Tuple[bool, str]:

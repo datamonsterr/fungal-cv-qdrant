@@ -6,6 +6,8 @@ from src.config import (
     FEATURES_JSON_PATH,
     PREPARED_SEGMENTS_METADATA_PATH,
     SOURCE_COLLECTIONS,
+    _PERFORM_RENAME,
+    perform_source_rename,
 )
 from src.experiments.feature_extraction.generate_features import generate_features
 from src.prepare.checks import check_dataset_root, check_metadata_exists, check_qdrant
@@ -13,7 +15,6 @@ from src.prepare.dataset import (
     prepare_dataset,
     resolve_source_collection_names,
     run_segmentation,
-    write_segment_metadata,
 )
 from src.utils.generate_strain_mapping import generate_strain_mapping
 from src.utils.upload_qdrant import upload_features_to_qdrant
@@ -37,18 +38,22 @@ def run_prepare_init(
     print("Generating strain mapping...")
     generate_strain_mapping()
 
+    if _PERFORM_RENAME:
+        print("Renaming source collections to canonical names...")
+        perform_source_rename()
+
     print("Preparing canonical dataset hierarchy...")
-    item_records, _ = prepare_dataset(
+    item_records = prepare_dataset(
         source_collections=resolve_source_collection_names(source_collections),
         limit=limit,
     )
+    print(f"  Prepared {len(item_records)} items")
 
     print("Running segmentation...")
-    segment_records = run_segmentation(item_records, limit=limit)
-    write_segment_metadata(segment_records)
-    print(f"  Segmented {len(item_records)} items → {len(segment_records)} segment records")
+    run_segmentation(item_records, limit=limit)
+    print(f"  Segmented {len(item_records)} items")
 
-    ok, msg = check_metadata_exists()
+    ok, msg = check_metadata_exists(collection_keys=resolved_collections)
     print(msg)
     if not ok:
         raise RuntimeError(msg)
@@ -111,7 +116,7 @@ def main() -> None:
         run_prepare_init(
             collection_name=args.collection,
             batch_size=args.batch_size,
-            source_collections=args.source_collections,
+            source_collections=args.source_collections or None,
             limit=args.limit,
         )
         print("Prepare init completed successfully.")

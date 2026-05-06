@@ -1,4 +1,5 @@
 import os
+import re
 from pathlib import Path
 
 
@@ -44,6 +45,7 @@ CANONICAL_CURATED_SOURCE_DATASET_PATH = DATASET_ROOT / "curated_primary"
 CANONICAL_INCOMING_SOURCE_DATASET_PATH = DATASET_ROOT / "incoming_low_quality"
 LEGACY_CURATED_SOURCE_DATASET_PATH = DATASET_ROOT / "original"
 LEGACY_INCOMING_SOURCE_DATASET_PATH = DATASET_ROOT / "new_data"
+
 CURATED_SOURCE_DATASET_PATH = (
     CANONICAL_CURATED_SOURCE_DATASET_PATH
     if CANONICAL_CURATED_SOURCE_DATASET_PATH.exists()
@@ -72,7 +74,32 @@ FULL_IMAGE_PATH = DATASET_ROOT / "full_image"
 SEGMENTED_IMAGE_DIR = DATASET_ROOT / "segmented_image"
 FILE_EXTENSION = ".jpg"
 
-# Metadata Paths
+# Rename control: set MYCOAI_PERFORM_SOURCE_RENAME=1 to atomically rename source dirs
+_PERFORM_RENAME = os.getenv("MYCOAI_PERFORM_SOURCE_RENAME", "") == "1"
+
+# Incoming source uses letter-range grouping folders that must be skipped
+LETTER_RANGE_PATTERN = re.compile(r"^[A-Z]\s*[-–]\s*[A-Z]$")
+
+# Incoming source filename: "Txxx ENV ob.jpg" or "Txxx ENV rev.jpg"
+INCOMING_FILENAME_PATTERN = re.compile(
+    r"(?P<strain>[A-Z0-9][A-Z0-9\s]*?[0-9]+)\s+(?P<environment>[A-Z0-9]+)\s+(?P<angle>ob|rev)",
+    re.IGNORECASE,
+)
+
+# Curated source filename: "DTO 148-D1 MEAob.jpg" or "DTO 148-D1 MEAob_edited.jpg"
+CURATED_FILENAME_PATTERN = re.compile(
+    r"(?P<strain>DTO\s[0-9]+-[A-Z0-9]+)\s+(?P<environment>[A-Z0-9]+)(?P<angle>ob|rev)",
+    re.IGNORECASE,
+)
+
+# Metadata Paths — consolidated per-collection JSON arrays
+CURATED_METADATA_PATH = DATASET_ROOT / "curated_primary_metadata.json"
+INCOMING_METADATA_PATH = DATASET_ROOT / "incoming_low_quality_metadata.json"
+COLLECTION_METADATA_PATHS = {
+    "curated": CURATED_METADATA_PATH,
+    "incoming": INCOMING_METADATA_PATH,
+}
+
 PREPARED_ITEMS_METADATA_PATH = DATASET_ROOT / "prepared_items_metadata.json"
 PREPARED_SEGMENTS_METADATA_PATH = DATASET_ROOT / "prepared_segments_metadata.json"
 FULL_IMAGE_METADATA_PATH = DATASET_ROOT / "full_image_metadata.json"
@@ -117,3 +144,18 @@ def get_qdrant_client():
     from qdrant_client import QdrantClient
 
     return QdrantClient(url=QDRANT_URL, api_key=QDRANT_API_KEY)
+
+
+def perform_source_rename() -> None:
+    """Atomically rename legacy source directories to canonical names.
+
+    original/ -> curated_primary/
+    new_data/  -> incoming_low_quality/
+    """
+    rename_map = [
+        (LEGACY_CURATED_SOURCE_DATASET_PATH, CANONICAL_CURATED_SOURCE_DATASET_PATH),
+        (LEGACY_INCOMING_SOURCE_DATASET_PATH, CANONICAL_INCOMING_SOURCE_DATASET_PATH),
+    ]
+    for legacy, canonical in rename_map:
+        if legacy.exists() and not canonical.exists():
+            legacy.rename(canonical)
