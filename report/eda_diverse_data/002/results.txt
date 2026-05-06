@@ -1,0 +1,6 @@
+Report results:
+- Primary metric: 1,012 total images across 2 source collections
+- 435 curated images (8 species, 31 strains, 7 environments) — 100% parsed
+- 577 incoming images (65 species, all unknown strain/env) — 0% parsed
+- All downstream code paths updated to canonical metadata-driven lookup
+- Pipeline: single entrypoint, dual segmentation, path-authoritative metadata

@@ -7,9 +7,9 @@ from typing import Dict, Set
 import pandas as pd
 
 from src.config import (
-    ORIGINAL_DATASET_PATH,
+    CURATED_SOURCE_DATASET_PATH,
+    PREPARED_ITEMS_METADATA_PATH,
     PROJECT_ROOT,
-    SEGMENTED_METADATA_PATH,
     STRAIN_SPECIES_MAPPING_PATH,
 )
 
@@ -49,8 +49,7 @@ def get_available_strains_from_metadata(metadata_path: Path) -> Set[str]:
 
     strains = set()
     for item in data:
-        # Handle both flat and nested structure
-        strain = item.get("data", item).get("strain")
+        strain = item.get("strain") or item.get("data", {}).get("strain")
         if strain and strain != "unknown":
             strains.add(strain)
     return strains
@@ -59,12 +58,13 @@ def get_available_strains_from_metadata(metadata_path: Path) -> Set[str]:
 def generate_strain_mapping(
     source_csv_path: Path = PROJECT_ROOT / "strain_to_specy.csv",
     output_csv_path: Path = STRAIN_SPECIES_MAPPING_PATH,
+    prepared_items_path: Path = PREPARED_ITEMS_METADATA_PATH,
 ):
     print("Generating strain mapping...")
 
     # 1. Scan Original Dataset for Mapping
-    print(f"Scanning {ORIGINAL_DATASET_PATH} for strain-species mapping...")
-    folder_mapping = get_strain_species_from_folders(ORIGINAL_DATASET_PATH)
+    print(f"Scanning {CURATED_SOURCE_DATASET_PATH} for strain-species mapping...")
+    folder_mapping = get_strain_species_from_folders(CURATED_SOURCE_DATASET_PATH)
 
     if not folder_mapping:
         print("Warning: No mapping found from dataset folders.")
@@ -88,9 +88,9 @@ def generate_strain_mapping(
     # We already know they are available if we scanned folders, but let's check metadata too if exists
     available_strains = set(folder_mapping.keys())
 
-    if SEGMENTED_METADATA_PATH.exists():
-        print(f"Verifying with metadata: {SEGMENTED_METADATA_PATH}")
-        metadata_strains = get_available_strains_from_metadata(SEGMENTED_METADATA_PATH)
+    if prepared_items_path.exists():
+        print(f"Verifying with metadata: {prepared_items_path}")
+        metadata_strains = get_available_strains_from_metadata(prepared_items_path)
         if metadata_strains:
             # Intersection
             available_strains = available_strains.intersection(metadata_strains)

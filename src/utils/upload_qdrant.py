@@ -1,26 +1,66 @@
 import argparse
 import json
 import sys
-from typing import Dict, List
+from typing import Any
 
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
 
 from src.config import (
+    COLLECTION_METADATA_PATHS,
     COLLECTION_NAME,
     QDRANT_API_KEY,
     QDRANT_URL,
-    SEGMENTED_METADATA_PATH,
 )
+
+
+def _load_all_items() -> list[dict[str, Any]]:
+    all_items: list[dict[str, Any]] = []
+    for path in COLLECTION_METADATA_PATHS.values():
+        if not path.exists():
+            continue
+        with open(path, "r") as f:
+            all_items.extend(json.load(f))
+    return all_items
+
+
+def _build_path_lookup(
+    items: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    lookup: dict[str, dict[str, Any]] = {}
+    for item in items:
+        for idx, seg_path in enumerate(item.get("paths", {}).get("segments", [])):
+            lookup[seg_path] = {
+                "instance_info": item.get("instance_info", {}),
+                "segmentation": item.get("segmentation", {}),
+                "index": idx,
+            }
+    return lookup
+
+
+def _build_id_lookup(
+    items: list[dict[str, Any]],
+) -> dict[str, dict[str, Any]]:
+    lookup: dict[str, dict[str, Any]] = {}
+    for item in items:
+        item_id = item.get("item_id", "")
+        for idx, seg_path in enumerate(item.get("paths", {}).get("segments", [])):
+            seg_id = f"{item_id}_seg{idx}"
+            lookup[seg_id] = {
+                "instance_info": item.get("instance_info", {}),
+                "segmentation": item.get("segmentation", {}),
+                "index": idx,
+                "segment_path": seg_path,
+            }
+    return lookup
 
 
 def create_collection(
     client: QdrantClient,
     collection_name: str,
-    vector_configs: Dict[str, int],
+    vector_configs: dict[str, int],
     distance: Distance = Distance.COSINE,
 ) -> None:
-    """Create a Qdrant collection with named vectors, replacing existing collection."""
     collections = client.get_collections().collections
     if any(col.name == collection_name for col in collections):
         print(f"Collection '{collection_name}' already exists. Deleting it...")
@@ -44,22 +84,17 @@ def upload_features_to_qdrant(
     client: QdrantClient,
     collection_name: str,
     features_json_path: str,
-    metadata_json_path: str,
+    metadata_json_path: str | None = None,
     batch_size: int = 100,
 ) -> None:
-    """Upload feature JSON records to Qdrant with metadata payloads."""
     with open(features_json_path, "r") as f:
         features_data = json.load(f)
 
     print(f"Loaded {len(features_data)} feature records from {features_json_path}")
 
-    with open(metadata_json_path, "r") as f:
-        metadata_list = json.load(f)
-
-    print(f"Loaded {len(metadata_list)} metadata records from {metadata_json_path}")
-
-    metadata_by_id = {item["id"]: item for item in metadata_list}
-    print(f"Created metadata lookup for {len(metadata_by_id)} records")
+    items = _load_all_items()
+    id_lookup = _build_id_lookup(items)
+    print(f"Loaded {len(items)} items from consolidated metadata ({len(id_lookup)} segment lookups)")
 
     if not features_data:
         print("No data to upload!")
@@ -74,33 +109,44 @@ def upload_features_to_qdrant(
 
     create_collection(client, collection_name, vector_configs)
 
-    points: List[PointStruct] = []
+    points: list[PointStruct] = []
     skipped_count = 0
 
     for idx, record in enumerate(features_data):
-        image_id = record["id"]
+        segment_id = record["id"]
+        meta = id_lookup.get(segment_id)
+
+        if meta is None:
+            print(f"Warning: No metadata found for segment_id {segment_id}, skipping...")
+            skipped_count += 1
+            continue
+
+        inst = meta["instance_info"]
+        seg = meta["segmentation"]
+        seg_idx = meta["index"]
+
+        bbox = {}
+        for method in ("kmeans", "contour"):
+            method_bboxes = seg.get(method, [])
+            if seg_idx < len(method_bboxes):
+                bbox = method_bboxes[seg_idx]
+                break
 
         vectors = {
             feat_name: feat_data["vector"]
             for feat_name, feat_data in record["features"].items()
         }
 
-        metadata = metadata_by_id.get(image_id)
-        if metadata is None:
-            print(f"Warning: No metadata found for image_id {image_id}, skipping...")
-            skipped_count += 1
-            continue
-
         payload = {
-            "image_id": image_id,
+            "image_id": segment_id,
             "feature_types": list(vectors.keys()),
-            "parent_id": metadata.get("parent_id", ""),
-            "segment_index": metadata.get("segment_index", -1),
-            "bbox": metadata.get("bbox", {}),
-            "strain": metadata.get("data", {}).get("strain", "unknown"),
-            "environment": metadata.get("data", {}).get("environment", "unknown"),
-            "angle": metadata.get("data", {}).get("angle", "unknown"),
-            "specy": metadata.get("data", {}).get("specy", "unknown"),
+            "parent_item_id": segment_id.rsplit("_seg", 1)[0] if "_seg" in segment_id else segment_id,
+            "segment_index": seg_idx,
+            "bbox": bbox,
+            "species": inst.get("species", "unknown"),
+            "strain": inst.get("strain", "unknown"),
+            "environment": inst.get("environment", "unknown"),
+            "angle": inst.get("angle", "unknown"),
         }
 
         point = PointStruct(id=idx, vector=vectors, payload=payload)
@@ -134,8 +180,8 @@ def main() -> None:
     )
     parser.add_argument(
         "--metadata-json",
-        default=str(SEGMENTED_METADATA_PATH),
-        help="Path to metadata JSON file",
+        default=None,
+        help="Path to metadata JSON file (optional; reads consolidated metadata by default)",
     )
     parser.add_argument(
         "--collection",

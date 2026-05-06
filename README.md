@@ -18,8 +18,8 @@ Shared runtime paths now live outside this submodule:
 
 ## High-Level Workflow
 
-1. Put raw data in `../Dataset/original/`
-2. Run prepare bootstrap
+1. Put raw data in `../Dataset/curated_primary/` and/or `../Dataset/incoming_low_quality/`
+2. Run prepare bootstrap (canonical hierarchy + segmentation + features)
 3. Run one or more experiment programs
 4. Run immutable checks from each experiment package
 5. Generate analysis visualizations
@@ -33,6 +33,33 @@ Shared runtime paths now live outside this submodule:
 - src/experiments/*/check.py: concise immutable targets colocated with each experiment
 - src/analysis: visualization and analysis scripts
 - report: archived markdown reports; new experiments should generate LaTeX reports
+
+## Canonical Dataset Layout
+
+After restructure, the dataset uses a canonical hierarchy:
+
+```
+Dataset/
+├── curated_primary/              # Primary curated source images (equiv. to original/)
+├── incoming_low_quality/         # Lower-quality incoming source images (equiv. to new_data/)
+└── prepared/                     # Canonical derived hierarchy
+    └── {species}/
+        └── {strain}/
+            └── {environment}/
+                └── {image_stem}/
+                    ├── source.jpg
+                    ├── prepared.jpg
+                    ├── item.json
+                    ├── segments_kmeans/seg_0.jpg, seg_1.jpg, seg_2.jpg
+                    ├── segments_contour/seg_0.jpg, ...
+                    ├── bbox_kmeans.jpg
+                    ├── bbox_contour.jpg
+                    ├── pipeline_kmeans.jpg
+                    └── pipeline_contour.jpg
+```
+
+Metadata records carry exact canonical paths. Consumers read `segment_path` from
+`Dataset/prepared_segments_metadata.json` instead of constructing flat directory paths.
 
 ## Remote Workspace Bootstrap
 
@@ -62,9 +89,9 @@ local SSH config.
 ### Preview and run dataset sync
 
 ```bash
-uv run python tools/dataset_sync.py plan --direction import --remote mydrive:mycoai-dataset --scope original/sample
-uv run python tools/dataset_sync.py import --remote mydrive:mycoai-dataset --scope original/sample
-uv run python tools/dataset_sync.py export --remote mydrive:mycoai-dataset --scope segmented_image/new-batch
+uv run python tools/dataset_sync.py plan --direction import --remote mydrive:mycoai-dataset --scope curated_primary/sample
+uv run python tools/dataset_sync.py import --remote mydrive:mycoai-dataset --scope curated_primary/sample
+uv run python tools/dataset_sync.py export --remote mydrive:mycoai-dataset --scope prepared/segments
 ```
 
 The sync CLI uses non-destructive `rclone copy` operations, expects credentials
@@ -76,11 +103,13 @@ access and scope before starting an `import` or `export`.
 
 Run these commands from the monorepo root with `uv --directory fungal-cv-qdrant ...`.
 
-### 1) Full Preparation (Dataset/original -> Qdrant)
+### 1) Full Preparation (Source Collections -> Canonical Hierarchy + Segments + Features)
 
 ```bash
 uv --directory fungal-cv-qdrant run python -m src.prepare.init --collection myco_fungi_features_full
 ```
+
+Options: `--source-collection curated`, `--source-collection incoming`, `--limit N` for smoke runs.
 
 ### 2) Generate Mapping Only
 
@@ -88,18 +117,24 @@ uv --directory fungal-cv-qdrant run python -m src.prepare.init --collection myco
 uv --directory fungal-cv-qdrant run python -m src.utils.generate_strain_mapping
 ```
 
-### 3) Extract Features Only
+### 3) Analyze Source Datasets
+
+```bash
+uv --directory fungal-cv-qdrant run python -m src.analysis.dataset_eda --format json
+```
+
+### 4) Extract Features Only (from canonical segment metadata)
 
 ```bash
 uv --directory fungal-cv-qdrant run python -m src.experiments.feature_extraction.generate_features
 ```
 
-### 4) Unified Upload (single JSON)
+### 5) Unified Upload (to Qdrant)
 
 ```bash
 uv --directory fungal-cv-qdrant run python -m src.utils.upload_qdrant \
   --features-json ../Dataset/segmented_features.json \
-  --metadata-json ../Dataset/segmented_image_metadata.json \
+  --metadata-json ../Dataset/prepared_segments_metadata.json \
   --collection myco_fungi_features_full
 ```
 
@@ -174,3 +209,5 @@ uv --directory repos/fungal-cv-qdrant run ruff check src/experiments/
 - src/main.py was removed by design.
 - Qdrant named vectors must still match extractor names.
 - New experiments should include program.md and a colocated check.py target.
+- Source collections `Dataset/curated_primary/` and `Dataset/incoming_low_quality/` are canonical; legacy `Dataset/original/` and `Dataset/new_data/` still work as fallback.
+- Segment metadata at `Dataset/prepared_segments_metadata.json` carries `segment_path` fields; consumers should use those instead of `Dataset/segmented_image/{id}.jpg`.

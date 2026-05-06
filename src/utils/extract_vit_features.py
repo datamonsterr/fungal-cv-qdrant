@@ -16,7 +16,7 @@ from typing import List
 
 import cv2
 
-from src.config import DATASET_ROOT, SEGMENTED_IMAGE_DIR, SEGMENTED_METADATA_PATH
+from src.config import DATASET_ROOT, SEGMENTED_IMAGE_DIR, SEGMENTED_METADATA_PATH, WORKSPACE_ROOT
 from src.experiments.feature_extraction.feature_extractors import (
     ViT256DinoExtractor,
     ViTCellVitX20Extractor,
@@ -69,8 +69,12 @@ def extract_vit_features(
     skipped = 0
 
     for idx, metadata in enumerate(metadata_list):
-        image_id = metadata["id"]
-        image_path = SEGMENTED_IMAGE_DIR / f"{image_id}.jpg"
+        image_id = metadata.get("segment_id") or metadata["id"]
+        segment_path = metadata.get("segment_path")
+        if segment_path:
+            image_path = WORKSPACE_ROOT / segment_path
+        else:
+            image_path = SEGMENTED_IMAGE_DIR / f"{image_id}.jpg"
 
         if not image_path.exists():
             print(f"Warning: Image {image_path} not found, skipping...")
