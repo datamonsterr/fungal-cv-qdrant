@@ -132,6 +132,43 @@ uv --directory fungal-cv-qdrant run python -m src.colab_config
 
 Colab assets are under src/experiments/finetune_dl/colab/.
 
+## Autolab Multi-Agent System
+
+Five-agent orchestration layer for autonomous iterative experimentation.
+
+| Agent | Model | Role |
+|-------|-------|------|
+| `autolab` | BigBrain | Orchestrator — invoke this one |
+| `researcher` | BigBrain | Literature scout → `research/paper-ideas.md` |
+| `planner` | MidBrain | Queue coordinator → assigns `run_id` + branch |
+| `worker` | MiniBrain | Isolated experiment runner via git worktree |
+| `reporter` | MiniBrain | Status summarizer → F1 summary + staircase chart |
+
+### Usage
+
+```bash
+# From monorepo root
+opencode
+# Prompt: "run one autoresearch pass on retrieval experiment"
+```
+
+### Research Notebook
+
+```
+research/
+├── paper-ideas.md   # hypotheses (Researcher writes, Planner reads)
+├── results.tsv      # run ledger (Worker appends)
+├── do-not-repeat.md # tried-and-failed strategies (Planner writes)
+└── papers/          # markitdown-converted PDFs (Researcher writes)
+```
+
+### Test
+
+```bash
+uv --directory repos/fungal-cv-qdrant run pytest tests/ -q
+uv --directory repos/fungal-cv-qdrant run ruff check src/experiments/
+```
+
 ## Notes
 
 - src/main.py was removed by design.
