@@ -5,6 +5,7 @@ from src.config import (
     COLLECTION_NAME,
     FEATURES_JSON_PATH,
     PREPARED_SEGMENTS_METADATA_PATH,
+    SOURCE_COLLECTIONS,
 )
 from src.experiments.feature_extraction.generate_features import generate_features
 from src.prepare.checks import check_dataset_root, check_metadata_exists, check_qdrant
@@ -24,7 +25,11 @@ def run_prepare_init(
     source_collections: list[str] | None = None,
     limit: int | None = None,
 ) -> None:
-    ok, msg = check_dataset_root()
+    resolved_collections = resolve_source_collection_names(source_collections)
+    request_paths = [
+        SOURCE_COLLECTIONS[key]["path"] for key in resolved_collections
+    ]
+    ok, msg = check_dataset_root(request_paths)
     print(msg)
     if not ok:
         raise RuntimeError(msg)

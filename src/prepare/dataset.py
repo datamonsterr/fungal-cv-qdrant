@@ -295,6 +295,7 @@ class SegmentationResult:
     bbox_visualization_path: str | None = None
     pipeline_visualization_path: str | None = None
     failure_reason: str | None = None
+    segment_bboxes: list[dict[str, int]] | None = None
 
 
 def _contour_bboxes(image: np.ndarray) -> list[dict[str, int]]:
@@ -427,6 +428,7 @@ def _segment_with_method(
             segments_dir=relative_to_workspace(segments_dir),
             bbox_visualization_path=relative_to_workspace(bbox_path),
             pipeline_visualization_path=relative_to_workspace(pipeline_path),
+            segment_bboxes=bboxes,
         )
 
     return result
@@ -458,7 +460,11 @@ def run_segmentation(
                     uuid.NAMESPACE_URL,
                     f"{item_record.item_id}:{result.method}:{idx}",
                 ).hex
-                h, w = (256, 256)
+                seg_bbox = (
+                    result.segment_bboxes[idx]
+                    if result.segment_bboxes and idx < len(result.segment_bboxes)
+                    else {"xmin": 0, "ymin": 0, "xmax": 256, "ymax": 256}
+                )
                 segment_records.append(
                     SegmentRecord(
                         segment_id=seg_id,
@@ -470,7 +476,7 @@ def run_segmentation(
                         strain=item_record.strain,
                         environment=item_record.environment,
                         angle=item_record.angle,
-                        bbox={"xmin": 0, "ymin": 0, "xmax": w, "ymax": h},
+                        bbox=seg_bbox,
                     )
                 )
         processed += 1
