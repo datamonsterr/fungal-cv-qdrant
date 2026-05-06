@@ -4,7 +4,6 @@ from pathlib import Path
 
 def _default_workspace_root() -> Path:
     project_root = Path(__file__).resolve().parent.parent
-    parent = project_root.parent
     monorepo_markers = (
         "Dataset",
         "results",
@@ -17,10 +16,11 @@ def _default_workspace_root() -> Path:
         "CLAUDE.md",
     )
 
-    if project_root.name == "fungal-cv-qdrant" and any(
-        (parent / marker).exists() for marker in monorepo_markers
-    ):
-        return parent
+    search_roots = [project_root.parent, project_root.parent.parent]
+    if project_root.name == "fungal-cv-qdrant":
+        for candidate in search_roots:
+            if any((candidate / marker).exists() for marker in monorepo_markers):
+                return candidate
 
     return project_root
 
@@ -40,13 +40,43 @@ SPECIES_WEIGHTS_PATH = Path(
 ).resolve()
 
 # Dataset Paths
-ORIGINAL_DATASET_PATH = DATASET_ROOT / "original"
+CANONICAL_CURATED_SOURCE_DATASET_PATH = DATASET_ROOT / "curated_primary"
+CANONICAL_INCOMING_SOURCE_DATASET_PATH = DATASET_ROOT / "incoming_low_quality"
+LEGACY_CURATED_SOURCE_DATASET_PATH = DATASET_ROOT / "original"
+LEGACY_INCOMING_SOURCE_DATASET_PATH = DATASET_ROOT / "new_data"
+CURATED_SOURCE_DATASET_PATH = (
+    CANONICAL_CURATED_SOURCE_DATASET_PATH
+    if CANONICAL_CURATED_SOURCE_DATASET_PATH.exists()
+    else LEGACY_CURATED_SOURCE_DATASET_PATH
+)
+INCOMING_SOURCE_DATASET_PATH = (
+    CANONICAL_INCOMING_SOURCE_DATASET_PATH
+    if CANONICAL_INCOMING_SOURCE_DATASET_PATH.exists()
+    else LEGACY_INCOMING_SOURCE_DATASET_PATH
+)
+SOURCE_COLLECTIONS = {
+    "curated": {
+        "display_name": "curated_primary",
+        "quality_tier": "curated",
+        "path": CURATED_SOURCE_DATASET_PATH,
+    },
+    "incoming": {
+        "display_name": "incoming_low_quality",
+        "quality_tier": "incoming",
+        "path": INCOMING_SOURCE_DATASET_PATH,
+    },
+}
+ORIGINAL_DATASET_PATH = CURATED_SOURCE_DATASET_PATH
+PREPARED_DATASET_DIR = DATASET_ROOT / "prepared"
 FULL_IMAGE_PATH = DATASET_ROOT / "full_image"
 SEGMENTED_IMAGE_DIR = DATASET_ROOT / "segmented_image"
+FILE_EXTENSION = ".jpg"
 
 # Metadata Paths
+PREPARED_ITEMS_METADATA_PATH = DATASET_ROOT / "prepared_items_metadata.json"
+PREPARED_SEGMENTS_METADATA_PATH = DATASET_ROOT / "prepared_segments_metadata.json"
 FULL_IMAGE_METADATA_PATH = DATASET_ROOT / "full_image_metadata.json"
-SEGMENTED_METADATA_PATH = DATASET_ROOT / "segmented_image_metadata.json"
+SEGMENTED_METADATA_PATH = PREPARED_SEGMENTS_METADATA_PATH
 STRAIN_SPECIES_MAPPING_PATH = DATASET_ROOT / "strain_to_specy.csv"
 
 # Feature Paths
@@ -75,7 +105,11 @@ RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
 def relative_to_workspace(path: Path) -> str:
     """Return a path string relative to the monorepo/workspace root."""
-    return str(Path(path).resolve().relative_to(WORKSPACE_ROOT))
+    resolved = Path(path).resolve()
+    try:
+        return str(resolved.relative_to(WORKSPACE_ROOT))
+    except ValueError:
+        return str(resolved)
 
 
 def get_qdrant_client():

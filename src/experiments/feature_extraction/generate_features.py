@@ -6,7 +6,7 @@ import numpy as np
 import torch
 from tqdm import tqdm
 
-from src.config import FEATURES_JSON_PATH, SEGMENTED_IMAGE_DIR, SEGMENTED_METADATA_PATH
+from src.config import FEATURES_JSON_PATH, SEGMENTED_METADATA_PATH, WORKSPACE_ROOT
 from src.experiments.feature_extraction.feature_extractors import (
     ColorHistogramExtractor,
     ColorHistogramHSconcatResnet50,
@@ -20,9 +20,9 @@ from src.experiments.feature_extraction.feature_extractors import (
 
 
 def generate_features(
-    image_dir: Path = SEGMENTED_IMAGE_DIR,
     metadata_path: Path = SEGMENTED_METADATA_PATH,
     output_path: Path = FEATURES_JSON_PATH,
+    image_dir: Path | None = None,
 ) -> None:
 
     if not metadata_path.exists():
@@ -34,9 +34,8 @@ def generate_features(
 
     print(f"Found {len(metadata_list)} images in metadata.")
 
-    # Initialize extractors
     extractors = [
-        ColorHistogramHSconcatResnet50(),  # Added back the combined extractor
+        ColorHistogramHSconcatResnet50(),
         ResNet50Extractor(),
         MobileNetV2Extractor(),
         EfficientNetB1Extractor(),
@@ -49,30 +48,32 @@ def generate_features(
     features_data = []
 
     for item in tqdm(metadata_list, desc="Extracting features"):
-        image_id = item["id"]
-        image_path = image_dir / f"{image_id}.jpg"
+        segment_id = item.get("segment_id") or item.get("id")
+        segment_path = item.get("segment_path")
+        if not segment_id:
+            continue
+
+        if segment_path:
+            image_path = WORKSPACE_ROOT / segment_path
+        elif image_dir is not None:
+            image_path = image_dir / f"{segment_id}.jpg"
+        else:
+            continue
 
         if not image_path.exists():
             continue
-
-        # Read image
-        # Note: Deep learning extractors usually handle
-        # reading/transforming internally or expect a path/PIL image.
-        # My BaseDeepLearningExtractor.extract takes an image path.
-        # The traditional ones take a numpy array (cv2 image).
 
         img_cv2 = cv2.imread(str(image_path))
         if img_cv2 is None:
             continue
 
-        record = {"id": image_id, "features": {}}
+        record = {"id": segment_id, "features": {}}
 
         for extractor in extractors:
             try:
                 if hasattr(extractor, "extract"):
                     vector = extractor.extract(img_cv2)
 
-                    # Convert to list for JSON serialization
                     if isinstance(vector, np.ndarray):
                         vector = vector.tolist()
                     elif isinstance(vector, torch.Tensor):
@@ -83,11 +84,10 @@ def generate_features(
                         "dimension": len(vector),
                     }
             except Exception as e:
-                print(f"Error extracting {extractor.name} for {image_id}: {e}")
+                print(f"Error extracting {extractor.name} for {segment_id}: {e}")
 
         features_data.append(record)
 
-    # Save to JSON
     with open(output_path, "w") as f:
         json.dump(features_data, f)
 

@@ -15,6 +15,7 @@ from src.config import (
     SEGMENTED_IMAGE_DIR,
     SEGMENTED_METADATA_PATH,
     WEIGHTS_DIR,
+    WORKSPACE_ROOT,
 )
 from src.experiments.feature_extraction.feature_extractors import (
     EfficientNetB1Extractor,
@@ -68,8 +69,12 @@ def extract_finetuned_features(  # noqa: C901
     results = []
 
     for idx, metadata in enumerate(metadata_list):
-        image_id = metadata["id"]
-        image_path = segmented_image_path / f"{image_id}.jpg"
+        image_id = metadata.get("segment_id") or metadata["id"]
+        segment_path = metadata.get("segment_path")
+        if segment_path:
+            image_path = WORKSPACE_ROOT / segment_path
+        else:
+            image_path = segmented_image_path / f"{image_id}.jpg"
 
         if not image_path.exists():
             print(f"Warning: Image not found: {image_path}")

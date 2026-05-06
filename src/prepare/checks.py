@@ -4,22 +4,28 @@ from typing import Tuple
 from qdrant_client import QdrantClient
 
 from src.config import (
-    ORIGINAL_DATASET_PATH,
+    PREPARED_SEGMENTS_METADATA_PATH,
     QDRANT_API_KEY,
     QDRANT_URL,
-    SEGMENTED_METADATA_PATH,
 )
+from src.prepare.dataset import required_source_roots
 
 
-def check_dataset_root(path: Path = ORIGINAL_DATASET_PATH) -> Tuple[bool, str]:
-    if not path.exists():
-        return False, f"Dataset root does not exist: {path}"
-    if not any(path.iterdir()):
-        return False, f"Dataset root is empty: {path}"
-    return True, f"Dataset root is ready: {path}"
+def check_dataset_root(path: Path | None = None) -> Tuple[bool, str]:
+    candidate_paths = [path] if path is not None else required_source_roots()
+    missing_paths = [candidate for candidate in candidate_paths if not candidate.exists()]
+    if missing_paths:
+        missing = ", ".join(str(candidate) for candidate in missing_paths)
+        return False, f"Dataset source roots do not exist: {missing}"
+    empty_paths = [candidate for candidate in candidate_paths if not any(candidate.iterdir())]
+    if empty_paths:
+        empty = ", ".join(str(candidate) for candidate in empty_paths)
+        return False, f"Dataset source roots are empty: {empty}"
+    ready = ", ".join(str(candidate) for candidate in candidate_paths)
+    return True, f"Dataset source roots are ready: {ready}"
 
 
-def check_metadata_exists(path: Path = SEGMENTED_METADATA_PATH) -> Tuple[bool, str]:
+def check_metadata_exists(path: Path = PREPARED_SEGMENTS_METADATA_PATH) -> Tuple[bool, str]:
     if not path.exists():
         return False, f"Segmented metadata file missing: {path}"
     if path.stat().st_size == 0:

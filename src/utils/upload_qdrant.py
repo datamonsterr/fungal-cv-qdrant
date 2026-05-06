@@ -58,7 +58,7 @@ def upload_features_to_qdrant(
 
     print(f"Loaded {len(metadata_list)} metadata records from {metadata_json_path}")
 
-    metadata_by_id = {item["id"]: item for item in metadata_list}
+    metadata_by_id = {item.get("segment_id") or item["id"]: item for item in metadata_list}
     print(f"Created metadata lookup for {len(metadata_by_id)} records")
 
     if not features_data:
@@ -94,13 +94,13 @@ def upload_features_to_qdrant(
         payload = {
             "image_id": image_id,
             "feature_types": list(vectors.keys()),
-            "parent_id": metadata.get("parent_id", ""),
+            "parent_id": metadata.get("parent_item_id", metadata.get("parent_id", "")),
             "segment_index": metadata.get("segment_index", -1),
             "bbox": metadata.get("bbox", {}),
-            "strain": metadata.get("data", {}).get("strain", "unknown"),
-            "environment": metadata.get("data", {}).get("environment", "unknown"),
-            "angle": metadata.get("data", {}).get("angle", "unknown"),
-            "specy": metadata.get("data", {}).get("specy", "unknown"),
+            "strain": metadata.get("strain", metadata.get("data", {}).get("strain", "unknown")),
+            "environment": metadata.get("environment", metadata.get("data", {}).get("environment", "unknown")),
+            "angle": metadata.get("angle", metadata.get("data", {}).get("angle", "unknown")),
+            "specy": metadata.get("species", metadata.get("data", {}).get("specy", "unknown")),
         }
 
         point = PointStruct(id=idx, vector=vectors, payload=payload)
