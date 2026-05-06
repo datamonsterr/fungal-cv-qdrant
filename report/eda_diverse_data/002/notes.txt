@@ -1,0 +1,23 @@
+EDA for canonical dataset restructure completed on 2026-05-06.
+
+Key outcomes:
+- Renamed source collections: original → curated_primary, new_data → incoming_low_quality
+- Unified preparation pipeline in src/prepare/dataset.py (replaces reformat_dataset.py + reformat_dataset_yolo.py)
+- Canonical prepared hierarchy: {species}/{strain}/{environment}/{stem}/
+- Dual segmentation: KMeans + Contour methods per image
+- All downstream consumers updated to read segment_path from metadata
+- DATASET_ROOT env var supports external storage paths
+
+Observations:
+- Incoming collection (577 images, 65 species) has zero parsed metadata — all unknown
+- P. cyclopium only 1 strain → limitation for retrieval holdout
+- 7 environments balanced in curated collection
+
+Risks:
+- Legacy flat paths (Dataset/segmented_image/) removed — consumers must use metadata
+- Incoming metadata gap needs address for environment-aware experiments
+
+Next steps:
+- Enrich incoming collection metadata (batch filename parsing or manual annotation)
+- Generate API examples for metadata-driven segment loading
+- Re-run retrieval evaluation with new paths
