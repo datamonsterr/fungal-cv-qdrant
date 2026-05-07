@@ -104,6 +104,7 @@ def run_yolo26_train(
     device: str = "0",
     data_root: Path | None = None,
     workers: int = 8,
+    resume: bool = False,
 ) -> dict[str, Any]:
     cfg = FinetuneConfig(
         model_variant=model_variant,
@@ -139,7 +140,13 @@ def run_yolo26_train(
     YOLO_WEIGHTS_DIR.mkdir(parents=True, exist_ok=True)
     YOLO_RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
-    model = YOLO(f"{cfg.model_name}.pt")
+    if resume:
+        best_pt = YOLO_WEIGHTS_DIR / f"{cfg.model_name}_species_best.pt"
+        if not best_pt.exists():
+            raise FileNotFoundError(f"No checkpoint to resume at {best_pt}")
+        model = YOLO(str(best_pt))
+    else:
+        model = YOLO(f"{cfg.model_name}.pt")
 
     start = time.time()
     train_results = model.train(
@@ -150,6 +157,7 @@ def run_yolo26_train(
         patience=cfg.patience,
         device=cfg.device,
         workers=workers,
+        resume=resume,
         project=str(YOLO_RESULTS_DIR),
         name="train",
         exist_ok=True,

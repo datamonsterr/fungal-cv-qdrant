@@ -64,6 +64,7 @@ def _cmd_train(args: argparse.Namespace) -> None:
         imgsz=args.imgsz,
         device=args.device,
         workers=args.workers,
+        resume=args.resume,
     )
     print(json.dumps(result, indent=2))
 
@@ -143,6 +144,7 @@ def main() -> None:
     p_train.add_argument("--imgsz", type=int, default=640)
     p_train.add_argument("--device", default="0")
     p_train.add_argument("--workers", type=int, default=8)
+    p_train.add_argument("--resume", action="store_true", help="Resume from best checkpoint")
 
     # infer
     p_infer = sub.add_parser("infer", help="Run YOLOv26 inference on prepared dataset")
