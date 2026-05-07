@@ -344,10 +344,11 @@ def run_yolo26_inference(
     root = Path(data_root) if data_root else PREPARED_DATASET_DIR
     img_exts = {".jpg", ".jpeg", ".png"}
 
-    image_paths: list[Path] = []
-    for img_path in sorted(root.rglob("*")):
-        if img_path.is_file() and img_path.suffix.lower() in img_exts:
-            image_paths.append(img_path)
+    image_paths = sorted(
+        img_path
+        for img_path in root.rglob("prepared.jpg")
+        if img_path.is_file() and img_path.suffix.lower() in img_exts
+    )  # type: list[Path]
     total = len(image_paths)
     image_paths = image_paths[:limit] if limit else image_paths
 
