@@ -300,8 +300,9 @@ def remote_nohup_train(
     remote_workspace: str = "/root/mycoai",
 ) -> int | None:
     cmd = (
-        f"cd {remote_workspace} && "
-        f"nohup uv --directory repos/fungal-cv-qdrant run python "
+        f"cd {remote_workspace}/repos/fungal-cv-qdrant && "
+        f"MYCOAI_ROOT={remote_workspace} "
+        f"nohup uv run python "
         f"-m src.experiments.yolo_segmentation.cli train "
         f"--model-variant {model_variant} --epochs {epochs} --batch {batch} "
         f"> /tmp/yolo26_train.log 2>&1 & echo $!"
@@ -324,17 +325,20 @@ def bootstrap_remote(
     ssh_port: int = 61872,
     instance_id: str = "36259342",
     branch: str | None = None,
-    repo_url: str = "https://github.com/datamonsterr/mycoai_projects.git",
+    repo_url: str = "https://github.com/datamonsterr/fungal-cv-qdrant.git",
+    remote_workspace: str = "/root/mycoai",
 ) -> bool:
 
     branch = branch or "006-yolo26-seg-finetune"
 
+    submodule_dir = f"{remote_workspace}/repos/fungal-cv-qdrant"
+
     steps = [
-        f"rm -rf /root/mycoai && git clone {repo_url} /root/mycoai",
-        f"cd /root/mycoai && git checkout {branch}",
-        "cd /root/mycoai && git submodule update --init --recursive",
-        "cd /root/mycoai && mise install 2>/dev/null; mise trust 2>/dev/null; true",
-        "cd /root/mycoai && uv --directory repos/fungal-cv-qdrant sync",
+        f"mkdir -p {remote_workspace}/repos && rm -rf {submodule_dir} && git clone {repo_url} {submodule_dir}",
+        f"cd {submodule_dir} && git checkout {branch}",
+        f"mkdir -p {remote_workspace}/Dataset {remote_workspace}/weights/yolo26 {remote_workspace}/results",
+        "pip install uv 2>/dev/null || curl -LsSf https://astral.sh/uv/install.sh | sh; true",
+        f"cd {submodule_dir} && MYCOAI_ROOT={remote_workspace} uv sync",
     ]
 
     for i, step in enumerate(steps, 1):
@@ -436,10 +440,11 @@ def remote_infer(
     remote_weights = f"{remote_workspace}/weights/yolo26/{weights_name}"
 
     cmd = (
-        f"cd {remote_workspace} && "
-        f"uv --directory repos/fungal-cv-qdrant run python "
+        f"cd {remote_workspace}/repos/fungal-cv-qdrant && "
+        f"MYCOAI_ROOT={remote_workspace} "
+        f"uv run python "
         f"-m src.experiments.yolo_segmentation.cli infer "
-        f"--weights {remote_weights} --data-root Dataset/prepared {limit_flag}"
+        f"--weights {remote_weights} --data-root {remote_workspace}/Dataset/prepared {limit_flag}"
     )
     print("Running remote inference...")
     result = ssh_run(host, cmd, ssh_port=ssh_port, timeout=7200)
