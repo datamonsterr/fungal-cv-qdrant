@@ -297,6 +297,7 @@ def remote_nohup_train(
     model_variant: str = "n",
     epochs: int = 30,
     batch: int = 8,
+    workers: int = 2,
     remote_workspace: str = "/root/mycoai",
 ) -> int | None:
     cmd = (
@@ -305,6 +306,7 @@ def remote_nohup_train(
         f"nohup uv run python "
         f"-m src.experiments.yolo_segmentation.cli train "
         f"--model-variant {model_variant} --epochs {epochs} --batch {batch} "
+        f"--workers {workers} "
         f"> /tmp/yolo26_train.log 2>&1 & echo $!"
     )
     result = ssh_run(host, cmd, ssh_port=ssh_port, timeout=30)
@@ -358,7 +360,7 @@ def bootstrap_remote(
 def remote_train(
     host: str,
     ssh_port: int = 61872,
-    scp_port: int = 61888,
+    scp_port: int = 61872,
     model_variant: str = "n",
     epochs: int = 30,
     batch: int = 8,
@@ -422,7 +424,7 @@ def remote_train(
 def remote_infer(
     host: str,
     ssh_port: int = 61872,
-    scp_port: int = 61888,
+    scp_port: int = 61872,
     weights_path: str = "",
     limit: int | None = None,
     remote_workspace: str = "/root/mycoai",

@@ -103,6 +103,7 @@ def run_yolo26_train(
     imgsz: int = 640,
     device: str = "0",
     data_root: Path | None = None,
+    workers: int = 8,
 ) -> dict[str, Any]:
     cfg = FinetuneConfig(
         model_variant=model_variant,
@@ -148,6 +149,7 @@ def run_yolo26_train(
         batch=cfg.batch,
         patience=cfg.patience,
         device=cfg.device,
+        workers=workers,
         project=str(YOLO_RESULTS_DIR),
         name="train",
         exist_ok=True,

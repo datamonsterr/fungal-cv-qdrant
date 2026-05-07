@@ -63,6 +63,7 @@ def _cmd_train(args: argparse.Namespace) -> None:
         batch=args.batch,
         imgsz=args.imgsz,
         device=args.device,
+        workers=args.workers,
     )
     print(json.dumps(result, indent=2))
 
@@ -141,6 +142,7 @@ def main() -> None:
     p_train.add_argument("--batch", type=int, default=8)
     p_train.add_argument("--imgsz", type=int, default=640)
     p_train.add_argument("--device", default="0")
+    p_train.add_argument("--workers", type=int, default=8)
 
     # infer
     p_infer = sub.add_parser("infer", help="Run YOLOv26 inference on prepared dataset")
@@ -161,16 +163,17 @@ def main() -> None:
     p_rt = sub.add_parser("remote-train", help="SCP dataset, train remotely, retrieve weights")
     p_rt.add_argument("--host", default="1.208.108.242")
     p_rt.add_argument("--ssh-port", type=int, default=61872)
-    p_rt.add_argument("--scp-port", type=int, default=61888)
+    p_rt.add_argument("--scp-port", type=int, default=61872)
     p_rt.add_argument("--model-variant", default="n", choices=["n", "s", "m", "l", "x"])
     p_rt.add_argument("--epochs", type=int, default=30)
     p_rt.add_argument("--batch", type=int, default=8)
+    p_rt.add_argument("--workers", type=int, default=2)
 
     # remote-infer
     p_ri = sub.add_parser("remote-infer", help="Run inference remotely and retrieve outputs")
     p_ri.add_argument("--host", default="1.208.108.242")
     p_ri.add_argument("--ssh-port", type=int, default=61872)
-    p_ri.add_argument("--scp-port", type=int, default=61888)
+    p_ri.add_argument("--scp-port", type=int, default=61872)
     p_ri.add_argument("--weights", required=True)
     p_ri.add_argument("--limit", type=int, default=None)
 

@@ -245,6 +245,64 @@ def generate_formulas(scores: np.ndarray) -> Dict[str, np.ndarray]:
         + w_exp15[2] * s[:, 2] / (s[:, 3] + eps)
         + w_exp15[3] * s[:, 3] / (s[:, 4] + eps)
     )
+    # wtd_rat_halving_log: log1p transform on each ratio (compresses extreme gap ratios)
+    formulas["wtd_rat_halving_log"] = (
+        w_halving[0] * np.log1p(s[:, 0] / (s[:, 1] + eps))
+        + w_halving[1] * np.log1p(s[:, 1] / (s[:, 2] + eps))
+        + w_halving[2] * np.log1p(s[:, 2] / (s[:, 3] + eps))
+        + w_halving[3] * np.log1p(s[:, 3] / (s[:, 4] + eps))
+    )
+    # wtd_rat_halving_shallow: base-1.333 geometric decay [1, 0.75, 0.563, 0.422]
+    w_shallow = np.array([1.0, 1/1.333, 1/(1.333**2), 1/(1.333**3)])
+    formulas["wtd_rat_halving_shallow"] = (
+        w_shallow[0] * s[:, 0] / (s[:, 1] + eps)
+        + w_shallow[1] * s[:, 1] / (s[:, 2] + eps)
+        + w_shallow[2] * s[:, 2] / (s[:, 3] + eps)
+        + w_shallow[3] * s[:, 3] / (s[:, 4] + eps)
+    )
+    # wtd_rat_top3: only top 3 ratios (drop s3/s4 — least reliable)
+    formulas["wtd_rat_top3"] = (
+        1.0 * s[:, 0] / (s[:, 1] + eps)
+        + 0.5 * s[:, 1] / (s[:, 2] + eps)
+        + 0.25 * s[:, 2] / (s[:, 3] + eps)
+    )
+    # wtd_rat_shift1: start from s1/s2 [1.0, 0.5, 0.25] (skip s0/s1 which may be noisy)
+    formulas["wtd_rat_shift1"] = (
+        1.0 * s[:, 1] / (s[:, 2] + eps)
+        + 0.5 * s[:, 2] / (s[:, 3] + eps)
+        + 0.25 * s[:, 3] / (s[:, 4] + eps)
+    )
+
+    # ----- Ensemble formulas -----
+    gnorm_02 = (s[:, 0] - s[:, 2]) / (s[:, 0] + eps)
+    gnorm_03 = (s[:, 0] - s[:, 3]) / (s[:, 0] + eps)
+    wtd_rat_h = (
+        1.0 * s[:, 0] / (s[:, 1] + eps)
+        + 0.5 * s[:, 1] / (s[:, 2] + eps)
+        + 0.25 * s[:, 2] / (s[:, 3] + eps)
+        + 0.125 * s[:, 3] / (s[:, 4] + eps)
+    )
+    cv_top5 = np.std(s[:, :5], axis=1) / (np.mean(s[:, :5], axis=1) + eps)
+    cv_top3 = np.std(s[:, :3], axis=1) / (np.mean(s[:, :3], axis=1) + eps)
+    neg_entropy = -(s[:, 0] * np.log(s[:, 0] + eps) + s[:, 1] * np.log(s[:, 1] + eps) + s[:, 2] * np.log(s[:, 2] + eps))
+    def norm01(x):
+        xmin, xmax = x.min(), x.max()
+        if xmax - xmin < eps: return np.zeros_like(x)
+        return (x - xmin) / (xmax - xmin)
+    # ens_top3_mean: normalized mean of top 3 formula families
+    formulas["ens_top3_mean"] = (
+        norm01(gnorm_02) + norm01(wtd_rat_h) + norm01(cv_top5)
+    ) / 3.0
+    # ens_top3_wtd: weighted by historical performance (gnorm_02 ~0.4, wtd_rat ~0.46, cv_top5 ~0.35)
+    formulas["ens_top3_wtd"] = (
+        0.40 * norm01(gnorm_02) + 0.46 * norm01(wtd_rat_h) + 0.35 * norm01(cv_top5)
+    )
+    # ens_gnorm_pair: mean of two best gnorm variants
+    gnorm_02_p_03 = gnorm_02 + gnorm_03
+    formulas["ens_gnorm_pair"] = norm01(gnorm_02_p_03)
+    # ens_wtd_cv: wtd_rat combined with CV
+    formulas["ens_wtd_cv"] = norm01(wtd_rat_h) * norm01(cv_top5)
+
     # Three-term consecutive ratios
     formulas["rat01_p_rat12_p_rat23"] = (
         s[:, 0] / (s[:, 1] + eps)
