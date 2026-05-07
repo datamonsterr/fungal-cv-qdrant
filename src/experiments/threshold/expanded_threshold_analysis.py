@@ -229,6 +229,22 @@ def generate_formulas(scores: np.ndarray) -> Dict[str, np.ndarray]:
         + w_lin[2] * s[:, 2] / (s[:, 3] + eps)
         + w_lin[3] * s[:, 3] / (s[:, 4] + eps)
     )
+    # wtd_rat_harmonic: harmonic decay weights [1.0, 0.5, 0.333, 0.25]
+    w_harmonic = np.array([1.0, 1/2, 1/3, 1/4])
+    formulas["wtd_rat_harmonic"] = (
+        w_harmonic[0] * s[:, 0] / (s[:, 1] + eps)
+        + w_harmonic[1] * s[:, 1] / (s[:, 2] + eps)
+        + w_harmonic[2] * s[:, 2] / (s[:, 3] + eps)
+        + w_harmonic[3] * s[:, 3] / (s[:, 4] + eps)
+    )
+    # wtd_rat_exp_1.5: base-1.5 geometric decay [1.0, 0.667, 0.444, 0.296]
+    w_exp15 = np.array([1.0, 1/1.5, 1/(1.5**2), 1/(1.5**3)])
+    formulas["wtd_rat_exp_1.5"] = (
+        w_exp15[0] * s[:, 0] / (s[:, 1] + eps)
+        + w_exp15[1] * s[:, 1] / (s[:, 2] + eps)
+        + w_exp15[2] * s[:, 2] / (s[:, 3] + eps)
+        + w_exp15[3] * s[:, 3] / (s[:, 4] + eps)
+    )
     # Three-term consecutive ratios
     formulas["rat01_p_rat12_p_rat23"] = (
         s[:, 0] / (s[:, 1] + eps)

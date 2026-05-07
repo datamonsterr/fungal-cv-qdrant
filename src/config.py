@@ -1,5 +1,6 @@
 import os
 import re
+from dataclasses import dataclass
 from pathlib import Path
 
 
@@ -39,6 +40,59 @@ RESULTS_DIR = Path(os.getenv("RESULTS_DIR", str(WORKSPACE_ROOT / "results"))).re
 SPECIES_WEIGHTS_PATH = Path(
     os.getenv("SPECIES_WEIGHTS_PATH", str(WORKSPACE_ROOT / "species_weights.json"))
 ).resolve()
+
+# YOLOv26 Paths
+YOLO_DATASET_DIR = Path(
+    os.getenv("YOLO_DATASET_DIR", str(DATASET_ROOT / "manual_labeled_data_roboflow_species"))
+).resolve()
+YOLO_WEIGHTS_DIR = Path(
+    os.getenv("YOLO_WEIGHTS_DIR", str(WEIGHTS_DIR / "yolo26"))
+).resolve()
+YOLO_RESULTS_DIR = Path(
+    os.getenv("YOLO_RESULTS_DIR", str(RESULTS_DIR / "yolo26_finetune"))
+).resolve()
+YOLO_CLASS_NAMES = {
+    0: "Penicillium aurantiogriseum",
+    1: "Penicillium cyclopium",
+    2: "Penicillium freii",
+    3: "Penicillium melanoconidium",
+    4: "Penicillium neoechinulatum",
+    5: "Penicillium polonicum",
+    6: "Penicillium tricolor",
+    7: "Penicillium viridicatum",
+}
+
+# Vast.ai Configuration
+@dataclass
+class VastAiConfig:
+    instance_id: str = ""
+    host: str = ""
+    ssh_port: int = 22
+    scp_port: int = 22
+    user: str = "root"
+    remote_workspace: str = "/root/mycoai"
+
+    @classmethod
+    def from_env(cls) -> "VastAiConfig":
+        return cls(
+            instance_id=os.getenv("VASTAI_INSTANCE_ID", ""),
+            host=os.getenv("VASTAI_HOST", ""),
+            ssh_port=int(os.getenv("VASTAI_SSH_PORT", "22")),
+            scp_port=int(os.getenv("VASTAI_SCP_PORT", "22")),
+            user=os.getenv("VASTAI_USER", "root"),
+            remote_workspace=os.getenv("VASTAI_REMOTE_WORKSPACE", "/root/mycoai"),
+        )
+
+    @classmethod
+    def from_defaults(cls) -> "VastAiConfig":
+        return cls(
+            instance_id="36259342",
+            host="1.208.108.242",
+            ssh_port=61872,
+            scp_port=61888,
+            user="root",
+            remote_workspace="/root/mycoai",
+        )
 
 # Dataset Paths
 CANONICAL_CURATED_SOURCE_DATASET_PATH = DATASET_ROOT / "curated_primary"
