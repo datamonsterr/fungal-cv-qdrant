@@ -343,7 +343,7 @@ def bootstrap_remote(
 
     for i, step in enumerate(steps, 1):
         print(f"[{i}/{len(steps)}] {step[:80]}...")
-        result = ssh_run(host, step, ssh_port=ssh_port, timeout=600)
+        result = ssh_run(host, step, ssh_port=ssh_port, timeout=900)
         if result.returncode != 0:
             print(f"  FAILED: {result.stderr[:200]}")
             return False
