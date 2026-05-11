@@ -30,7 +30,8 @@ class TestValidateDataset:
         report = validate_yolo_dataset()
         assert report.total_images == 435
         assert report.total_labels == 435
-        assert report.class_names == ["colony"]
+        assert len(report.class_names) == 8
+        assert "Penicillium cyclopium" in report.class_names
         assert report.valid is True
 
     def test_report_on_missing_dir(self):
@@ -53,9 +54,9 @@ class TestDatasetSplit:
         train, val, train_txt, val_txt = create_train_val_split(
             train_ratio=0.8, seed=42
         )
-        assert len(train) + len(val) == 435
-        assert len(train) == 348
-        assert len(val) == 87
+        assert len(train) + len(val) == 348
+        assert len(train) == 303
+        assert len(val) == 45
         assert train_txt.exists()
         assert val_txt.exists()
 
@@ -90,7 +91,8 @@ class TestYamlRewrite:
         assert "path" in data
         assert "train" in data
         assert "val" in data
-        assert data["names"] == {0: "colony"}
+        assert len(data["names"]) == 8
+        assert data["names"][0] == "Penicillium aurantiogriseum"
 
 
 class TestFinetuneConfig:

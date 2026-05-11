@@ -8,7 +8,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
+import pandas as pd  # type: ignore[import-untyped]
 
 SRC = Path(__file__).resolve().parent.parent / "src"
 sys.path.insert(0, str(SRC))
@@ -105,7 +105,7 @@ def plot_comparison_stats(summary_path: Path):
 def plot_best_map_progression(df: pd.DataFrame):
     """Plot the running best mAP@50 across epochs."""
     df = df.dropna(subset=["metrics/mAP50(B)"])
-    best = np.maximum.accumulate(df["metrics/mAP50(B)"])
+    best = np.maximum.accumulate(df["metrics/mAP50(B)"].to_numpy())
 
     fig, ax = plt.subplots(figsize=(10, 4))
     ax.plot(df["epoch"], df["metrics/mAP50(B)"], alpha=0.4, color="gray", linewidth=0.8, label="Per-epoch mAP@50")
@@ -113,7 +113,7 @@ def plot_best_map_progression(df: pd.DataFrame):
     ax.fill_between(df["epoch"], best, alpha=0.1, color="green")
     ax.set_xlabel("Epoch")
     ax.set_ylabel("mAP@50")
-    ax.set_title("YOLOv26n: mAP@50 Convergence (Best: {:.3f})".format(best.iloc[-1]))
+    ax.set_title("YOLOv26n: mAP@50 Convergence (Best: {:.3f})".format(float(best[-1])))
     ax.legend()
     ax.grid(True, alpha=0.3)
     ax.set_ylim(0.4, 1.02)

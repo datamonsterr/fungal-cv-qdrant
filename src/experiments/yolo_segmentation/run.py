@@ -228,7 +228,7 @@ def _yolo26_detect(
             for box in r.boxes:
                 cx, cy, bw, bh = box.xywhn[0].tolist()
                 conf = float(box.conf[0])
-                pixel = norm_xywh_to_pixel(cx, cy, bw, bh, w, h)
+                pixel: dict[str, Any] = norm_xywh_to_pixel(cx, cy, bw, bh, w, h)
                 pixel["confidence"] = round(conf, 4)
                 bboxes.append(pixel)
     bboxes.sort(key=lambda b: b["confidence"], reverse=True)
@@ -262,6 +262,8 @@ def save_inference_artifacts(
         "yolo26": [_bbox_to_schema(b) for b in yolo26_bboxes],
         "kmeans": [_bbox_to_schema(b) for b in kmeans_bboxes],
     }
+
+    img_h, img_w = prepared_image.shape[:2]
 
     # YOLOv26 visualization
     if yolo26_bboxes:

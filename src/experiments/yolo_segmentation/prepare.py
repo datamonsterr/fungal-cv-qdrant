@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-import yaml
+import yaml  # type: ignore[import-untyped]
 
 from src.config import (
     WORKSPACE_ROOT,
@@ -107,8 +107,6 @@ def cleanup_stale_datasets() -> list[str]:
 
 def validate_yolo_dataset(dataset_dir: Path | None = None) -> DatasetReport:
     root = dataset_dir or YOLO_DATASET_DIR
-    images_dir = root / "images"
-    labels_dir = root / "labels"
     classes_file = root / "classes.txt"
     yaml_file = root / "dataset.yaml"
 
@@ -119,19 +117,27 @@ def validate_yolo_dataset(dataset_dir: Path | None = None) -> DatasetReport:
 
     img_exts = {".jpg", ".jpeg", ".png"}
     image_stems: set[str] = set()
-    if images_dir.exists():
-        for img in images_dir.iterdir():
-            if img.is_file() and img.suffix.lower() in img_exts:
-                image_stems.add(img.stem)
-    report.total_images = len(image_stems)
-
     label_stems: set[str] = set()
-    if labels_dir.exists():
-        for lbl in labels_dir.iterdir():
-            if lbl.is_file() and lbl.suffix == ".txt":
-                label_stems.add(lbl.stem)
-    report.total_labels = len(label_stems)
 
+    split_dirs = [
+        (root / split / "images", root / split / "labels")
+        for split in ("train", "test", "valid")
+    ]
+    if not any(images_dir.exists() for images_dir, _ in split_dirs):
+        split_dirs = [(root / "images", root / "labels")]
+
+    for images_dir, labels_dir in split_dirs:
+        if images_dir.exists():
+            for img in images_dir.iterdir():
+                if img.is_file() and img.suffix.lower() in img_exts:
+                    image_stems.add(f"{images_dir.parent.name}/{img.stem}")
+        if labels_dir.exists():
+            for lbl in labels_dir.iterdir():
+                if lbl.is_file() and lbl.suffix == ".txt":
+                    label_stems.add(f"{labels_dir.parent.name}/{lbl.stem}")
+
+    report.total_images = len(image_stems)
+    report.total_labels = len(label_stems)
     report.unpaired_images = sorted(image_stems - label_stems)
     report.unpaired_labels = sorted(label_stems - image_stems)
 
@@ -169,13 +175,15 @@ def rewrite_dataset_yaml(
     if not yaml_path.exists():
         raise FileNotFoundError(f"dataset.yaml not found at {yaml_path}")
 
-    data: dict[str, Any] = {}
-    if yaml_path.exists():
-        data = yaml.safe_load(yaml_path.read_text()) or {}
-
+    data: dict[str, Any] = yaml.safe_load(yaml_path.read_text()) or {}
     data["path"] = str(root.resolve())
-    data["train"] = train_list or str((root / "images").resolve())
-    data["val"] = val_list or str((root / "images").resolve())
+
+    if (root / "train" / "images").exists():
+        data["train"] = train_list or str((root / "train" / "images").resolve())
+        data["val"] = val_list or str((root / "test" / "images").resolve())
+    else:
+        data["train"] = train_list or str((root / "images").resolve())
+        data["val"] = val_list or str((root / "images").resolve())
 
     if "names" not in data:
         data["names"] = YOLO_CLASS_NAMES
@@ -194,9 +202,24 @@ def create_train_val_split(
     seed: int = 42,
 ) -> tuple[list[str], list[str], Path, Path]:
     root = dataset_dir or YOLO_DATASET_DIR
-    images_dir = root / "images"
     img_exts = {".jpg", ".jpeg", ".png"}
 
+    train_dir = root / "train" / "images"
+    test_dir = root / "test" / "images"
+    if train_dir.exists() and test_dir.exists():
+        train_images = sorted(
+            img.name for img in train_dir.iterdir() if img.is_file() and img.suffix.lower() in img_exts
+        )
+        val_images = sorted(
+            img.name for img in test_dir.iterdir() if img.is_file() and img.suffix.lower() in img_exts
+        )
+        train_txt = root / "train.txt"
+        val_txt = root / "val.txt"
+        train_txt.write_text("\n".join(str(train_dir / name) for name in train_images))
+        val_txt.write_text("\n".join(str(test_dir / name) for name in val_images))
+        return train_images, val_images, train_txt, val_txt
+
+    images_dir = root / "images"
     image_names = sorted(
         img.name
         for img in images_dir.iterdir()
